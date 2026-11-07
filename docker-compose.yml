@@ -1,0 +1,78 @@
+services:
+    database:
+        image: supabase/postgres:17.6.1.168-ha-1
+        container_name: database
+        ports:
+            - "5432:5432"
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: password
+            POSTGRES_DB: postgres
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+            #- ./init.sql:/docker-entrypoint-initdb.d/init.sql
+        networks:
+            - pulser-net
+        restart: unless-stopped
+
+    package-extractor:
+        image: alpine:latest
+        container_name: pulser-package-extractor
+        volumes:
+            - ./package/pulsar-1.0.0.tgz:/tmp/pulsar-1.0.0.tgz:ro
+            - extracted-package:/extracted
+        command: >
+            sh -c "rm -rf /extracted/* /extracted/.* 2>/dev/null; tar -xzf /tmp/pulsar-1.0.0.tgz -C /extracted --strip-components=1 && ls -la /extracted"
+      
+    edge-runtime:
+        image: public.ecr.aws/supabase/edge-runtime:v1.68.4
+        container_name: edge-runtime
+        ports:
+            - "9999:9999"
+        volumes:
+            - ./examples/multi-runtimes/edge-functions/functions:/home/deno/functions:ro
+            - extracted-package:/home/deno/pulsar:ro
+        environment:
+            - JWT_SECRET=super-secret-jwt-token-with-at-least-32-characters
+            - VERIFY_JWT=false
+        command:
+            - "start"
+            - "--main-service"
+            - "/home/deno/functions/main"
+            - "--import-map=/home/deno/functions/import_map.json"
+            - "--port"
+            - "9999"
+            - "--ip"
+            - "0.0.0.0"
+        networks:
+            - pulser-net
+        restart: unless-stopped
+
+    redis:
+        image: redis:alpine
+        container_name: pulser-redis
+        ports:
+            - "6379:6379"
+        networks:
+            - pulser-net
+        restart: unless-stopped
+
+    serverless-redis-http:
+        image: hiett/serverless-redis-http:latest
+        ports:
+            - "8079:80"
+        environment:
+            SRH_MODE: env
+            SRH_TOKEN: example_token
+            SRH_CONNECTION_STRING: "redis://redis:6379"
+        networks:
+            - pulser-net
+        restart: unless-stopped
+
+volumes:
+    extracted-package:
+    pgdata:
+
+networks:
+    pulser-net:
+        driver: bridge
