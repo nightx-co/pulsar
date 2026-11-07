@@ -1,0 +1,18 @@
+{
+    "nodeModulesDir": "auto",
+    "imports": {
+        "postgres": "npm:postgres@^3.4.4",
+        "ioredis": "npm:ioredis@^5.4.1",
+
+        "@pulsar": "./package/src/index.ts",
+        "@pulsar/storage": "./package/src/storage/index.ts",
+        "@pulsar/server": "./package/src/server/index.ts",
+        "@pulsar/integrations": "./package/src/integrations/index.ts"
+    },
+    "publish": {
+        "include": [
+            "src/**/*.ts",
+            "src/**/*.lua"
+        ]
+    }
+}

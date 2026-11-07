@@ -336,5 +336,5 @@ The request should return a `200 OK` response with a message indicating that the
 
 ## References
 
-- [Setting Up a Consumer in Serverless and Edge Runtimes](./deployment/persistent-runtime.mdx)
-- [Supabase Edge Functions Example](./deployment/persistent-runtime.mdx)
+- [Setting Up a Consumer in Serverless and Edge Runtimes](./pulsar-client-on-supabase.md)
+- [Supabase Edge Functions Example](../../../../../multi-runtimes/edge-functions/functions/)

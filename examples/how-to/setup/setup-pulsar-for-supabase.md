@@ -1,6 +1,6 @@
 ## Setup Pulsar for Supabase Database
 
-to start of you need to run the following sql script in your database with priviliged access.
+to start of you need to run the following sql script in your database with privileged access.
 
 ```sql
 BEGIN;

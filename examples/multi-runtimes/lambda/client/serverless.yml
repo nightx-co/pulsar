@@ -1,0 +1,26 @@
+# org: nightx
+service: pulsar-serverless
+
+provider:
+    name: aws
+    runtime: nodejs20.x
+
+    apiGateway:
+        binaryMediaTypes:
+            - "application/x-msgpack"
+            - "application/msgpack"
+            - "application/octet-stream"
+
+plugins:
+    - serverless-offline
+
+functions:
+    lambda-client-example:
+        handler: src/index.handler
+        events:
+            - http:
+                path: ack
+                method: post
+            - http:
+                path: dispatch
+                method: post

@@ -1,0 +1,1 @@
+Start local serverless : npx serverless offline start
