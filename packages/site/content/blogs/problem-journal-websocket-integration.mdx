@@ -1,0 +1,53 @@
+---
+title: "Problem Journal: WebSocket Integration in Pulsar"
+description: "Exploring WebSocket initialization, runtime compatibility, and developer experience challenges in the Pulsar network dispatch layer."
+author: "Hamim"
+date: "2026-10-24"
+tags:
+  - Pulsar
+  - Problem Journal
+  - WebSocket
+  - Network Dispatch
+  - Job Orchestration
+  - Runtime Compatibility
+  - Bun
+  - Node.js
+  - Deno
+  - Consumer Architecture
+  - Developer Experience
+---
+
+## Context
+
+Implementing the network dispatch layer between the Pulsar engine and consumer clients.
+
+## The Problem
+
+Pulsar is a push-based job orchestration engine. It pulls jobs from the queue and dispatches them to consumer clients through a network layer.
+
+- **Serverless consumers:** HTTP dispatch works naturally because the consumer already has an HTTP endpoint.
+- **Persistent consumers:** HTTP requests introduce unnecessary overhead for high-throughput dispatch. WebSockets are a more suitable option for maintaining a persistent connection between Pulsar and its consumers.
+
+## The Core Challenge: WebSocket Initialization and DX
+
+The challenge was determining how Pulsar should initialize its WebSocket server without forcing developers to write substantial amounts of additional infrastructure code.
+
+In runtimes such as Bun, initializing a WebSocket server involves creating an HTTP server and upgrading incoming HTTP requests to WebSocket connections. Other JavaScript runtimes, such as Node.js and Deno, have different APIs and initialization requirements.
+
+This creates several design concerns:
+
+- **SDK ownership:** Should Pulsar initialize and manage the WebSocket server internally, or should the developer create the server and pass the necessary request-handling logic to Pulsar?
+- **Developer experience:** Requiring developers to create an HTTP server, handle WebSocket upgrades, and wire callbacks into Pulsar adds complexity to an otherwise simple SDK initialization process.
+- **Runtime compatibility:** Pulsar must support different JavaScript runtimes without tightly coupling its core SDK to Bun's server implementation.
+- **Consumer initialization:** The consumer client must also establish a connection to Pulsar's WebSocket server when deployed in a persistent runtime, introducing additional setup complexity on the consumer side.
+- **Quick start complexity:** Storage initialization, engine configuration, driver setup, and other required components already contribute to the setup process. Adding manual network-server configuration makes the initial experience even more complicated.
+
+## Important Architectural Context
+
+The WebSocket connection is primarily a job dispatch channel from Pulsar to the consumer client. It is not intended to carry acknowledgements, retries, or other consumer-side job lifecycle operations back to Pulsar. Those responsibilities remain within the consumer client's own execution and storage mechanisms.
+
+The central question was how to design WebSocket initialization and runtime integration so that Pulsar could provide a straightforward developer experience without sacrificing runtime portability or requiring excessive manual configuration.
+
+## Status
+
+Problem documented. The solution and resulting design decisions will be recorded separately.

@@ -140,6 +140,7 @@ function Sidebar() {
           <div className="flex gap-5 text-sm text-[var(--color-text-muted)]">
             <a className="hover:text-[var(--color-text-main)]" href={LINKS.github}>GitHub</a>
             <a className="hover:text-[var(--color-text-main)]" href={LINKS.docs}>Docs</a>
+            <a className="hover:text-[var(--color-text-main)]" href={LINKS.blogs}>Blogs</a>
           </div>
           <Btn href={LINKS.quickstart} solid>Get started</Btn>
         </div>

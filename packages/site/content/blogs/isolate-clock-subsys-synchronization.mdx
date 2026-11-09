@@ -1,0 +1,23 @@
+---
+title: Isolate & Clock Subsystem Synchronization Importance
+description: An overview of the isolate and clock subsystems, their roles across serverless and edge runtimes, and how synchronization ensures precise execution timing.
+author: Hamim
+date: 2026-11-09
+tags: [Pulsar, Isolate, Clock, Synchronization, Serverless, Edge Runtime, Subsystems, Runtime Architecture]
+---
+
+## Isolate & Clock Subsystem Synchronization Importance
+
+The isolate and clock are the two most important subsystems for two different runtimes. The isolate is utilized by the isolate-based runtime or in other words the edge functions and edge runtimes. The clock subsystem is utilized by both the serverless runtime and the isolate runtimes or the edge runtimes. The importance of both the isolate and clock subsystems is non-negligible. In this discussion I want to make this more general by explaining their importance and what the mechanism and synchronization process of the isolate and clock basically are.
+
+Starting off with the isolate the isolate does not automatically refer to the context of the isolate runtime itself. Isolate in this case is a class that gets initialized outside of the handler function. By doing that in edge runtimes whatever variables functions and references are defined outside of the handler function can be accessed by subsequent requests that hit the same isolate. This means that subsequent requests can access the previous reference values that were defined at the top. However in serverless there is no such thing. If a variable is defined at the top outside of the handler function then the next invocation cannot access it even if the request is invoked in the same region or the same data center.
+
+Coming to the clock subsystem the clock is a service that holds precise timing. It does not use JavaScript date modules or date objects. Rather it only contains numbers. The clock itself will not initialize during initialization unless an isolate is needed.
+
+Talking about the isolate runtimes the flow is something like this. The isolate will initialize outside of the handler function and inside the initialization base class or the core class the clock subsystem will get initialized. Its max duration time will be set by the isolate max timing so that subsequent requests that land in the same isolate can directly synchronize or get the accurate remaining time based on when the isolate was created and started.
+
+In serverless however this is not the case. The clock max duration time will reset on every single invocation. This is the point where in serverless we do not need to worry about or manage the isolate. We can simply give the clock a fixed duration such as a max duration of 10 seconds or a number of seconds provided by the infrastructure and the vendors.
+
+As for the isolate runtimes and edge runtimes function duration is not the only limit. There is also the wall clock of the isolate. Subsequent requests must therefore stay synchronized with the isolate timing to guarantee precise timing before the isolate shuts down.
+
+The variables stored at the top make synchronization with the clock subsystem easier and more integrated. The clock subsystem holds the time while the isolate holds the creation time in isolate runtimes.

@@ -3,9 +3,9 @@
 -- Expiry: Redis uses HPEXPIRE to drop fields automatically. Postgres has no TTL, so we purge
 -- expired rows for both keys at the top of every call (and counts also filter on expires_at).
 
-DROP FUNCTION IF EXISTS register_workers(VARCHAR, VARCHAR, INT, INT, BIGINT, BIGINT, VARCHAR[]);
+DROP FUNCTION IF EXISTS pulsar.register_workers(VARCHAR, VARCHAR, INT, INT, BIGINT, BIGINT, VARCHAR[]);
 
-CREATE OR REPLACE FUNCTION register_workers (
+CREATE OR REPLACE FUNCTION pulsar.register_workers (
     p_queue_key VARCHAR,
     p_global_key VARCHAR,
     p_local_concurrency INT,

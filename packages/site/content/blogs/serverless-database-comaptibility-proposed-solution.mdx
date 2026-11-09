@@ -1,0 +1,139 @@
+---
+title: "Pulsar Serverless Database Compatibility: Proposed Solutions"
+description: "Documenting the proposed infrastructure abstractions for asynchronous invocation, scheduling, and real-time event transportation across PostgreSQL providers."
+author: "Hamim"
+date: "2026-11-07"
+tags:
+  - Pulsar
+  - Solution Journal
+  - Serverless
+  - PostgreSQL
+  - PGMQ
+  - PGNET
+  - PGCRON
+  - PGNOTIFY
+  - Infrastructure Abstraction
+  - Event-Driven Architecture
+  - Webhooks
+  - Real-Time Transport
+---
+
+### Where we are heading
+
+The compatibility problems identified in the previous journal made one thing clear: Pulsar cannot assume that every PostgreSQL provider offers the same database extensions and networking capabilities.
+
+PGMQ can remain the foundation of the messaging layer, but the operational infrastructure needs to become independent of the database provider.
+
+The proposed direction is to move responsibilities such as asynchronous invocation, scheduling, and real-time event delivery outside PostgreSQL whenever the required database capabilities are unavailable.
+
+Rather than introducing dependencies on specific infrastructure providers, Pulsar will expose abstractions that allow developers to integrate their preferred services.
+
+### 1. Asynchronous invocation without PGNET
+
+The problem with PGNET is its limited availability across managed PostgreSQL providers. Pulsar cannot rely entirely on database-side HTTP requests to asynchronously reinvoke serverless functions.
+
+The proposed solution is to introduce an external asynchronous invocation mechanism through an Infrastructure Handler Interface.
+
+When PGNET is available, Pulsar can continue using it to initiate asynchronous HTTP requests directly from PostgreSQL. When it is unavailable, developers can provide a custom handler responsible for scheduling the next invocation.
+
+This creates a provider-independent integration point without forcing the SDK to implement or depend on a particular external service.
+
+Developers can use infrastructure such as Upstash QStash, AWS SQS, or Cloudflare Queues to schedule and deliver asynchronous invocation requests.
+
+The important distinction is that Pulsar defines the invocation contract, while the developer decides how that contract is implemented.
+
+This keeps the SDK independent of external scheduling providers while preserving the ability to use database-native invocation when available.
+
+### 2. External scheduling instead of PGCRON
+
+PGCRON introduces another compatibility limitation because its availability and scheduling precision differ across PostgreSQL providers.
+
+The proposed approach is to move scheduling responsibility outside the database entirely.
+
+Instead of depending on database-native cron execution, Pulsar can expose an external Tick endpoint. This endpoint must be invoked periodically by an external scheduler.
+
+The hosting infrastructure becomes responsible for triggering the endpoint at the required interval.
+
+Potential scheduling integrations include:
+
+- Cloudflare Workers Cron Triggers
+- Vercel Cron Jobs
+- AWS EventBridge Scheduler
+
+When the Tick endpoint receives an invocation, Pulsar wakes up the serverless function and checks PostgreSQL through PGMQ for pending or due operations.
+
+It then processes the required work and terminates the execution.
+
+This changes the responsibility boundary. PostgreSQL remains responsible for storing and managing messaging state, while the external scheduler determines when Pulsar should execute its next processing cycle.
+
+By moving scheduling outside the database, Pulsar no longer needs to assume that PGCRON is available or that the database can provide the required scheduling precision.
+
+### 3. Real-time transport without PGNOTIFY
+
+The persistent runtime can use the Transport Abstraction Layer because it supports long-lived connections and continuous listening for PostgreSQL notifications.
+
+Serverless environments operate differently. They cannot reliably maintain persistent database connections or continuously consume notification streams.
+
+The proposed direction is to replace persistent database streaming with event-driven HTTP communication.
+
+There are two possible approaches, depending on whether the objective is to wake up the serverless runtime or deliver real-time updates directly to connected frontend clients.
+
+### 3.1. External webhook-based event delivery
+
+The first approach is to use an external event delivery mechanism to invoke the serverless runtime whenever relevant database events occur.
+
+Instead of relying on PGNOTIFY to deliver events to a continuously listening worker, PostgreSQL changes can be captured through database triggers and written into a PGMQ-backed event queue.
+
+An external queue consumer or webhook broker can then detect pending events and invoke the serverless function through HTTP.
+
+The serverless function wakes up, processes the event payload, and performs the required operations.
+
+This effectively replaces the persistent notification listener with an event-driven invocation mechanism.
+
+For applications that also require real-time frontend updates, the serverless function can publish notifications to an external WebSocket gateway such as Ably, Pusher, or AWS API Gateway.
+
+This separates event detection, serverless processing, and client notification into distinct responsibilities.
+
+### 3.2. External real-time gateway
+
+The second approach is to bypass the serverless runtime for persistent client connections entirely.
+
+Instead of maintaining a database notification connection through Pulsar, the frontend establishes a persistent connection directly with an external real-time provider.
+
+Whenever the serverless application writes data to PostgreSQL, it can also publish a lightweight notification to the external gateway through its HTTP API.
+
+The gateway then broadcasts that notification to connected clients.
+
+This separates database persistence from real-time client communication.
+
+PostgreSQL remains responsible for persistent application state, while the external gateway handles persistent connections and message delivery to frontend clients.
+
+The serverless runtime only needs to communicate with the gateway through HTTP. It does not need to maintain WebSocket connections or continuously listen for database notifications.
+
+### The distinction between the two transport approaches
+
+Although both approaches remove the dependency on PGNOTIFY, they address different requirements.
+
+The webhook-based approach is primarily concerned with waking up Pulsar's serverless runtime when database events need processing.
+
+The external real-time gateway approach is concerned with delivering notifications to connected frontend clients without routing persistent connections through the serverless runtime.
+
+These mechanisms are not necessarily mutually exclusive. An application may require both event-driven runtime invocation and direct real-time client communication.
+
+### Overall architecture direction
+
+The proposed solutions establish a clearer separation between PostgreSQL's core messaging capabilities and the infrastructure responsible for serverless execution.
+
+PGMQ remains the messaging foundation. The other operational responsibilities become independent infrastructure concerns:
+
+- **Asynchronous invocation:** An Infrastructure Handler Interface allows developers to integrate database-native PGNET or external invocation providers.
+- **Scheduling:** An external scheduler periodically invokes Pulsar's Tick endpoint, removing the dependency on PGCRON.
+- **Event transportation:** External webhook delivery or real-time gateways replace the need for persistent database notification connections in serverless environments.
+
+The objective is not to replace PostgreSQL or introduce mandatory dependencies on external infrastructure providers.
+
+It is to ensure that Pulsar can operate across different PostgreSQL environments without requiring every database provider to support the same extensions, networking capabilities, or scheduling infrastructure.
+
+This gives Pulsar a more flexible architecture: PostgreSQL provides the messaging foundation, while the surrounding infrastructure supplies the capabilities required by the execution environment.
+
+Ultimately, the database provider should not determine which serverless infrastructure Pulsar can support.

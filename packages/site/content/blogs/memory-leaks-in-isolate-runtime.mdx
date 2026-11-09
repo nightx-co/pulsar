@@ -1,0 +1,80 @@
+---
+title: "Pulsar Engine Isolate Memory Leak Investigation"
+description: "An investigation into linear memory growth and isolate lifecycle memory accumulation in the Supabase Edge Runtime."
+author: "Hamim"
+date: "2026-09-17"
+tags:
+  - Pulsar
+  - Memory Leak
+  - Isolate
+  - Edge Runtime
+  - Supabase
+  - Debugging
+  - Runtime Lifecycle
+---
+
+We had already spent days trying to understand what was actually causing the memory to grow. During every run, memory usage would slowly accumulate in a linear pattern. The strange part was what happened when an isolate was terminated. When the next isolate was created, memory would not return to the previous level. Instead, there would be another noticeable spike, sometimes around 8–10 MB higher than the previous usage, and the same thing would happen again with the next isolate termination and re-instantiation.
+
+With around 120 MB of memory available to the Docker container, it wouldn't take many cycles before the container eventually reached its limit.
+
+## Trying to Find the Leak
+
+At first, the assumption was that something inside the engine was not being cleaned up properly. The HTTP layer was one of the first things I looked at, especially the possibility of an unbounded HTTP call keeping something alive. I also started looking at the internal services. The clock service has timers, and the scheduler also has timers, so there was a possibility that some of these were surviving after the isolate was supposed to be gone.
+
+There were also questions around the disposal process itself. Maybe some variables were still being retained, or maybe terminating the isolate wasn't actually causing everything associated with it to be released.
+
+I spent a couple of days going through the engine this way. Different parts were commented out, variables were changed, functions were removed, and different modules were disabled just to see whether the memory behavior would change.
+
+It didn't. No matter how much of the engine was removed, the memory would still continue climbing.
+
+## The Isolate Restart Made It Worse
+
+The linear memory growth was already a problem, but the isolate behavior made it much more concerning. The memory wasn't just slowly increasing during normal execution. Every time the runtime terminated an isolate and created another one, the memory usage would jump to an even higher level.
+
+So instead of memory growing, the isolate terminating, and the memory returning to its previous baseline, we were seeing the memory grow, the isolate terminate, the memory jump higher, and then the same linear growth continue from that new level.
+
+After a few cycles, the container would be getting very close to its memory limit.
+
+Another strange part was the error being reported by the runtime. When the problem occurred, we were seeing `CPU time exceeded` / `CPU time soft limit reached` rather than the `wall clock time exceeded` behavior I would normally expect from a long-running function. That made it harder to understand whether the CPU limit was actually the cause or whether it was somehow a consequence of what was happening with the memory.
+
+## Removing the Engine
+
+After spending enough time trying to find the problem inside Pulsar, I didn't want to keep guessing. The next idea was to remove Pulsar completely.
+
+Instead of running the engine and trying to find which line of code was leaking, I tested the Edge Runtime itself with an almost empty function. The local setup had no agent, no storage connection, no Redis, and no application processing. There were no timers or listeners created by the function either.
+
+A cron process running from the terminal would simply make an HTTP request to the localhost function roughly every second. The function itself did essentially nothing other than return `hello world`.
+
+## The Same Problem Without Pulsar
+
+This was the point where the investigation became much clearer.
+
+Even with the engine removed, memory still slowly climbed. It was slower than what we were seeing with Pulsar running, but it was still there. More importantly, the isolate behavior was still the same. The runtime would terminate an isolate, the next request would create another one, and instead of memory returning to the previous baseline, there would be another jump. The new memory level would then become the starting point for the next period of linear growth.
+
+That was the strongest evidence we had. There was essentially no application code left that could be responsible for the behavior, yet the behavior was still reproducible.
+
+## What This Changed
+
+At this point, it no longer made sense to keep searching through the Pulsar engine for a memory leak. The problem could happen with an empty Edge Function.
+
+That ruled out the things we had originally been investigating inside the application: the HTTP handling, our timers, internal services, storage connections, and other application-level state. The problem had moved one layer deeper.
+
+It looked like something in the Edge Runtime's worker/isolate lifecycle was retaining memory even after an isolate had been terminated. The important observation wasn't simply that memory was increasing. It was that isolate termination was not bringing the container back to the memory baseline we expected.
+
+## Finding the Related Issue
+
+After getting this reproduction, I started searching for other people seeing the same behavior. That's when I found an issue in the Supabase Edge Runtime repository describing a similar memory accumulation problem. The reported behavior included memory continuously increasing until the runtime approached the memory limit, along with `CPU time` limit errors.
+
+Supabase Edge Runtime issue [#740](https://github.com/supabase/edge-runtime/issues/740)
+
+There was also another issue, [#212](https://github.com/supabase/edge-runtime/issues/212), which showed a similar category of memory not being reclaimed, although it was related to a different execution path. I couldn't assume that both issues had the same underlying cause.
+
+## Conclusion
+
+The investigation started with the assumption that we had a memory leak somewhere inside Pulsar. After days of removing and changing different parts of the engine, nothing affected the behavior.
+
+The turning point was removing the engine completely and reproducing the problem with an almost empty Edge Function. That showed that the memory accumulation was happening even without our application logic.
+
+At that point, the problem appeared to be at the runtime/container level rather than inside Pulsar itself. More specifically, the behavior pointed toward memory not being fully reclaimed across the Edge Runtime's isolate lifecycle.
+
+The exact reason for the `CPU time exceeded` message was still unclear, but the memory behavior itself was reproducible without the engine. That gave us a much clearer direction for the investigation.

@@ -1,0 +1,60 @@
+---
+title: "Problem Journal: Network Topology and Worker Architecture in Pulsar"
+description: "Exploring cross-runtime communication strategies, PostgreSQL connection pooling constraints, and worker class design across persistent and serverless environments."
+author: "Hamim"
+date: "2026-10-23"
+tags:
+  - Pulsar
+  - Problem Journal
+  - Network Topology
+  - WebSocket
+  - HTTP
+  - Connection Pooling
+  - PostgreSQL
+  - Worker Architecture
+  - DependentWorker
+  - Serverless
+  - TypeScript
+---
+
+## Context
+
+Designing cross-runtime communication between the Pulsar engine and consumer clients, including storage ownership and worker class design.
+
+## 1. Network Topology Across Runtimes
+
+Pulsar needs to select an appropriate communication protocol based on where the engine and consumer client are deployed.
+
+- **Both persistent:** WebSocket dispatch provides a persistent connection for efficient job delivery.
+- **Persistent engine + serverless consumer:** HTTP dispatch allows Pulsar to invoke the consumer's existing endpoint.
+- **Both serverless or edge-based:** HTTP is the intended communication mechanism because these environments generally cannot host persistent WebSocket connections reliably.
+
+The challenge is designing a consistent network layer that accommodates these deployment combinations without exposing unnecessary complexity to SDK users.
+
+## 2. The Database Connection Pooling Problem
+
+A second problem arises when the developer's PostgreSQL provider offers only a direct TCP connection without a connection pooler.
+
+A persistent engine can maintain a direct database connection, but a serverless consumer may exhaust the database's connection capacity if every invocation establishes its own connection.
+
+The proposed approach was a `DependentWorker`, which delegates storage operations to the persistent Pulsar engine through network requests. This allows the consumer to execute jobs without initializing its own PostgreSQL storage layer.
+
+Acknowledgement, negative acknowledgement (NACK), and retry operations would be handled through this delegated execution path rather than direct database access from the consumer.
+
+## 3. Worker Class Design and Type Constraints
+
+The architectural differences between `Worker` and `DependentWorker` introduce a class design problem.
+
+- **Worker:** Requires storage configuration and initializes its own `PulsarUnifiedStorage`.
+- **DependentWorker:** Requires connection configuration, such as a URL and headers, instead of local storage configuration.
+- **BaseWorker:** Contains shared processing logic, including concurrency, job execution, acknowledgement handling, retries, and deferred actions.
+
+The original `BaseWorker` implementation required storage for every worker, making it incompatible with `DependentWorker`.
+
+A generic `BaseWorker<TOptions>` was introduced to support different option types, but the shared implementation still directly accessed storage-specific properties and operations.
+
+The central challenge was determining how to share common worker behavior while allowing each worker type to have its own required configuration and execution responsibilities.
+
+## Status
+
+Problem documented. The solution and final architectural decisions will be recorded separately.

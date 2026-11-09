@@ -1,6 +1,6 @@
 
 export const INSTALL = "npm install pulsar";
-export const LINKS = { quickstart: "docs/getting-started/quickstart/serverless", github: "https://github.com/nightx-co/pulsar", docs: "docs/getting-started/introduction", config: "docs/configurations/overview" };
+export const LINKS = { quickstart: "docs/getting-started/quickstart/serverless", github: "https://github.com/nightx-co/pulsar", docs: "docs/getting-started/introduction", config: "docs/configurations/overview", blogs : "/blogs" };
 export const HEIGHTS = [46, 72, 38, 88, 54, 66, 32, 80, 50, 70];
 
  

@@ -1,0 +1,44 @@
+---
+title: "Solution Journal: Storage Client for Consumer Acknowledgements in Pulsar"
+description: "Introducing a lightweight storage client for consumer acknowledgements and worker lifecycle management across serverless and persistent runtimes."
+author: "Hamim"
+date: "2026-10-23"
+tags:
+  - Pulsar
+  - Solution Journal
+  - Storage Client
+  - Consumer Acknowledgement
+  - PGMQ
+  - Unified Storage
+  - Worker Lifecycle
+  - Serverless
+  - Architecture
+---
+
+## Context
+
+Resolving acknowledgement and worker lifecycle management across serverless and persistent deployments.
+
+## The Solution
+
+Pulsar will introduce a Lightweight Pulsar Storage Client that allows consumer functions to perform acknowledgement, NACK, retry, and relevant worker lifecycle operations directly through the shared storage layer.
+
+Instead of sending requests back to the Pulsar engine, consumers will initialize a lightweight client with the required storage configuration. This removes the dependency on an HTTP endpoint being available on the engine.
+
+## Architectural Approach
+
+- **Lightweight client:** Provides consumers with the storage operations they need without initializing the full Pulsar engine, its runtime loop, or its scheduling infrastructure.
+- **Shared storage abstraction:** Reuses `PulsarUnifiedStorage` and the relevant service and repository layers to support PostgreSQL- or Redis-backed operations.
+- **Direct acknowledgement:** Consumers execute acknowledgement, NACK, and retry operations through the storage layer rather than routing every operation through the Pulsar engine.
+- **Worker lifecycle management:** The client can access the storage operations responsible for worker registration and deregistration, keeping these responsibilities within the existing storage abstraction.
+- **Runtime independence:** Consumer acknowledgement no longer depends on whether Pulsar exposes an HTTP endpoint or runs in a serverless or persistent environment.
+
+## Expected Outcome
+
+This design preserves the separation between Pulsar's orchestration responsibilities and the consumer's job processing responsibilities. The engine remains responsible for pulling and dispatching jobs while consumers use the lightweight client to manage the relevant storage operations.
+
+It also avoids requiring consumers to initialize the entire engine or implement a separate network communication path solely for acknowledgement.
+
+## Status
+
+Solution selected. The Lightweight Pulsar Storage Client will serve as the consumer-facing abstraction for storage operations, with implementation details evolving as the SDK develops.
