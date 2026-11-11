@@ -2,7 +2,8 @@
     "name": "pulsar-monorepo",
     "private": true,
     "workspaces": [
-        "packages/*"
+        "packages/core",
+        "packages/client"
     ],
     "scripts": {
         "dev:core": "bun --filter @nightx.co/pulsar dev",
@@ -13,8 +14,6 @@
         "build:client": "bun --filter @nightx.co/pulsar-client build",
         "patch:client": "cd packages/client && npm version patch",
         "release:client": "cd packages/client/builds && npm publish --access public",
-        "web": "bun --filter site dev",
-        "build:web": "bun --filter site build",
         "build": "bun --filter '*' build"
     },
     "dependencies": {

@@ -1,0 +1,45 @@
+---
+title: Future Scheduling in Pulsar Isolated Runtime
+author: Hamim
+date: 2026-11-10
+description: A look at an existing limitation in Pulsar future scheduling behavior why isolate selection is not evaluated before execution and why Iam leaving this optimization for future improvements.
+tags:
+  - Pulsar
+  - Isolate
+  - Edge Runtime
+  - Serverless
+---
+
+## Future Scheduling in Pulsar's Isolated Runtime
+
+While working on Pulsar, I came across an area of the isolated runtime that I haven't changed yet: future scheduling.
+
+Currently, future scheduling in the isolated runtime behaves the same way it does in the serverless runtime. The scheduling implementation has not been adapted to account for the lifecycle of individual isolates.
+
+## The Potential Problem
+
+When a future-scheduled execution is dispatched, there is currently no evaluation of the target isolate's lifecycle or current state.
+
+This means the execution could potentially land in an isolate that is healthy and has plenty of remaining lifetime, or one that is already approaching termination with only a few seconds left.
+
+The latter scenario could introduce operational problems for the engine, potentially leaving an execution in an unfavorable state.
+
+At the moment, Pulsar does not distinguish between these scenarios before dispatching the execution.
+
+## Why I'm Leaving It As It Is
+
+I'm aware of this limitation, but I'm not planning to implement an additional evaluation mechanism right now.
+
+There are other areas of Pulsar that need my attention, and spending more development time on this particular edge case isn't my current priority.
+
+I'd rather keep the existing implementation for now and revisit it when there is actual feedback from developers using Pulsar in production.
+
+If someone encounters this behavior, they can report it through GitHub issues. Once there is enough evidence that this is causing a meaningful problem, I'll consider investigating and improving the scheduling behavior.
+
+## Moving Forward
+
+For now, I'm focusing on getting Pulsar's documentation and overall project experience into a good place.
+
+I want developers to understand how the engine works, where its current limitations are, and how they can contribute to improving it.
+
+Pulsar doesn't need to have every edge case solved before people can start using it. Some improvements are better driven by actual usage and community feedback.
