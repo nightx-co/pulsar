@@ -16,6 +16,8 @@ status: "Proposed Design"
 
 ## 1. State Machine-Based Tick Execution Gate
 
+![Socket Worker Lifecycle and Tick Coordination](../../public/blogs/soccket-worker-registration-and-stale-worker-slot.png)
+
 Rather than introducing a fixed startup grace period (e.g. 2000ms), the Tick Controller will use a state-machine-based approach to determine whether queue execution is permitted.
 
 This behavior will specifically apply to the Persistent Runtime when the queue consumer is configured as a socket consumer.
