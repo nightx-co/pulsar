@@ -1,0 +1,43 @@
+---
+title: "Problem Journal: Consumer Acknowledgement and Storage Ownership in Pulsar"
+description: "Documenting the architectural challenges of consumer acknowledgement, worker lifecycle management, and storage ownership across serverless and persistent runtimes."
+author: "Hamim"
+date: "2026-10-22"
+tags:
+  - Pulsar
+  - Problem Journal
+  - Consumer Acknowledgement
+  - PGMQ
+  - Storage Ownership
+  - Worker Lifecycle
+  - Serverless
+  - Architecture
+---
+
+## Context
+
+Designing job acknowledgement and worker lifecycle management when the Pulsar engine and consumer functions run in different deployment environments.
+
+## The Problem
+
+Pulsar pulls jobs from PGMQ and dispatches them to separate consumer functions. After processing a job, the consumer must acknowledge, negatively acknowledge, or retry it. These operations involve more than updating PostgreSQL rows: they also depend on worker registration and lifecycle state managed by Pulsar's unified storage layer, which can use PostgreSQL or Redis depending on the engine configuration.
+
+The original serverless approach was to send acknowledgement requests back to the Pulsar engine through its HTTP endpoint, allowing Pulsar to handle the storage operations centrally.
+
+However, this creates an architectural problem when Pulsar runs in a persistent runtime without an existing HTTP endpoint. The consumer has no established network interface through which to request acknowledgement operations.
+
+## Core Challenges
+
+- **Acknowledgement routing:** How can consumers communicate acknowledgement, NACK, and retry operations to Pulsar when the engine does not expose an HTTP endpoint?
+- **Storage ownership:** Should consumers initialize their own storage and drivers, or should all state-changing operations remain centralized within Pulsar?
+- **Worker registration:** Registration and lifecycle operations depend on the unified storage configuration, which may use PostgreSQL or Redis. Requiring each consumer to reproduce this configuration introduces duplication and complexity.
+- **Configuration consistency:** If consumers initialize their own storage, developers may need to repeat configuration across multiple consumer deployments, increasing setup complexity and the risk of inconsistent state.
+- **Architectural separation:** The solution must preserve Pulsar's role as the messaging orchestration engine while allowing consumer functions to process jobs independently.
+
+## The Central Question
+
+How should Pulsar handle consumer acknowledgement and worker lifecycle operations across serverless and persistent deployments without requiring an HTTP endpoint in every runtime or duplicating the engine's storage configuration across consumer clients?
+
+## Status
+
+Problem documented. The solution and resulting design decisions will be recorded separately.

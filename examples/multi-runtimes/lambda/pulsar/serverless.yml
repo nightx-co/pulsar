@@ -1,0 +1,21 @@
+org: nightx
+service: pulsar-serverless
+
+provider:
+    name: aws
+    runtime: nodejs20.x
+
+plugins:
+    - serverless-offline
+
+functions:
+    lambda-pulsar-example:
+        port : 3000
+        handler: src/index.handler
+        events:
+        - http:
+            path: ack
+            method: post
+        - http:
+            path: test
+            method: get

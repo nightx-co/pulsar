@@ -1,0 +1,64 @@
+---
+title: "Solution Journal: Keeping the Isolate Alive Through Shutdown"
+description: "Documenting the event bus promise-tracking fix that keeps the V8 isolate runtime alive until asynchronous shutdown operations complete."
+author: "Hamim"
+date: "2026-11-03"
+tags:
+  - Pulsar
+  - Solution Journal
+  - V8 Isolate
+  - Serverless
+  - Async Lifecycle
+  - Event Bus
+  - Promise Tracking
+  - Shutdown Management
+  - Keep Alive
+  - Supabase Edge Runtime
+---
+
+### Where we landed
+
+The fix turned out to be small, but it took a while to identify because the symptom was so far removed from the actual cause. The engine was not failing. It was finishing its work after the platform had already decided there was no work left. So the solution was not to change what the engine does, but to make sure the runtime can always see that something is still in progress until the engine is genuinely done.
+
+### The idea behind it
+
+The event bus was the weak point. When the isolate runtime finished a cycle, it emitted an event, and the bus dispatched it synchronously. The handler for that event was asynchronous and initiated the shutdown, but the bus discarded whatever the handler returned. From the outside, the emit appeared to finish in a few microseconds. The shutdown was running, but it belonged to nobody. Nothing held a reference to it, and nothing was waiting for it.
+
+Meanwhile, the request handler already had the right idea. It had a place at the end of the request where it was supposed to wait for any pending shutdown before returning a response. However, that wait referenced a promise that was never assigned, so it passed straight through. The request finished, the response went out, and the runtime looked around, saw no open request and no tracked work, and dropped the worker in the middle of the shutdown.
+
+### What changed
+
+The event bus now remembers the promises returned by its handlers. When a handler is asynchronous, the bus registers its promise at the moment of the emit, within the same synchronous turn. This eliminates the gap where work exists but nobody knows about it. When the promise settles, the bus removes it from the set. The bus also gained a way to wait until that set is empty. It keeps checking in a loop, so if one handler spawns additional work, that work gets awaited too.
+
+The engine's pending-shutdown wait now simply asks the bus to drain. Since the request handler already calls that wait in its `finally` block, the request stays open until the shutdown is genuinely finished. From the runtime's point of view, there is now an in-flight request for the entire shutdown, so there is nothing to drop early.
+
+I also made shutdown safe to call twice. The isolate runtime can emit the time-exceeded and cycle-completed events back to back, and both can trigger shutdown. Now, the second call simply returns the first call's promise instead of starting another shutdown on top of the first one.
+
+### Where my intuition and the actual fix differed
+
+The original idea was to create a global registry of promises that would keep the runtime fooled into thinking work remained. The core of that idea was right: track in-flight work and only clear it when the shutdown is complete.
+
+The adjustment was in who reads the registry. The runtime cannot see our registry. It only sees the open request and anything explicitly passed to a keep-alive hook. So the registry only helps because the request handler waits on it, and that wait is what the runtime actually observes.
+
+That also meant the registry should hold the real work, never placeholders, and should belong to each engine instance rather than being shared globally. This ensures that one request never ends up waiting for another engine instance's work.
+
+### Keeping the SDK clean
+
+We chose not to put the edge runtime's keep-alive call inside the SDK. A developer may already wrap the entire engine in their own keep-alive mechanism, and the SDK should not assume which platform it is running on.
+
+The compromise was to introduce an optional hook in the engine configuration. If a developer wants the platform-level safety net, they can pass a function that forwards the shutdown promise to their runtime's keep-alive mechanism. If they do not, the SDK still works through the request handler's wait alone.
+
+### Result
+
+After the change, the tests behaved as expected. Every cycle ran all its ticks, the shutdown completed, the self-invocation was scheduled, and every log line reached the logging service without anything missing.
+
+The platform's drop event now arrives after the shutdown has finished, which is the normal and healthy order.
+
+### What I take from it
+
+The lesson is that, on a serverless runtime, work is only real if the platform can see it. Asynchronous code merely running in the background is not enough. The platform judges liveness through tracked requests and explicit keep-alive promises, not by what the code happens to be doing.
+
+Whenever an event system sits between a trigger and an asynchronous job, that job needs an owner that the request is waiting on.
+
+It also explains why the bug remained hidden for so long. It depended on a race measured in milliseconds, behaved differently on every run, never appeared locally because the local runtime does not reclaim workers in the same way, and erased its own evidence by killing the process responsible for sending the logs.
+

@@ -1,0 +1,128 @@
+---
+
+title: Edge Runtimes and Serverless Runtimes - Premature Execution Cycle Termination
+
+description: An observation regarding how Pulsar handles tick cycle completion in edge and serverless execution environments, particularly when there is still sufficient execution time remaining to continue processing within the same execution context.
+
+author: hamim
+date: 2026-11-11
+tags:
+    - Potential Bug
+    - Serverless
+    - Edge Runtime
+    - Execution Lifecycle
+    - Pulsar
+
+---
+
+## Overview
+
+There is a potential limitation in how Pulsar currently handles execution cycles when running inside serverless and edge runtime environments.
+
+Specifically, when a tick cycle completes, Pulsar shuts down the current engine instance and schedules a self-invocation for a subsequent execution, even when the current execution context still has a considerable amount of execution time remaining.
+
+This behavior is worth examining because serverless and edge runtimes typically impose execution time limits. However, having a time limit does not necessarily mean that an execution should terminate as soon as a single tick cycle completes.
+
+Let's look at a practical example.
+
+## Current Behavior
+
+Imagine Pulsar is deployed inside an AWS Lambda function with an execution timeout of **60 seconds**.
+
+For this example, assume the following configuration:
+
+```ts
+{
+  queues: [
+    // Only one queue is configured
+  ],
+  cycleTickLimit: 10,
+}
+```
+
+With this configuration, Pulsar processes a batch of 10 ticks before completing its current tick cycle.
+
+Now, suppose the following happens:
+
+1. The Lambda function starts executing.
+2. Pulsar initializes its engine and connects to the storage.
+3. The engine begins processing ticks.
+4. After processing 10 ticks, the current tick cycle completes.
+5. At this point, the Lambda function still has approximately 40–50 seconds of execution time remaining.
+
+**The unexpected part is what happens next.**
+
+Instead of starting another tick cycle and continuing to process work within the existing execution context, Pulsar disconnects from storage, shuts down the engine, and schedules a self-invocation after the configured interval.
+
+Essentially, the current execution is terminated even though the runtime has not exhausted its execution time allowance.
+
+The same process then repeats in the newly invoked execution context.
+
+## Why This Matters
+
+This behavior potentially introduces unnecessary execution overhead in serverless and edge environments.
+
+Consider that the runtime has already allocated an execution context, initialized the engine, and established its required connections.
+
+If there is still sufficient execution time available, terminating that context after completing a single tick cycle means that the remaining execution window is not being utilized.
+
+For example:
+
+- Maximum execution time: 60 seconds.
+- Time consumed by the current tick cycle: 10–15 seconds.
+- Remaining execution time: 45–50 seconds.
+- Current behavior: Shut down the engine and schedule another invocation.
+
+This means Pulsar may repeatedly create new execution contexts even when the existing one could potentially continue processing.
+
+The same observation applies to edge runtimes, where execution lifecycle management and available execution time are equally important considerations.
+
+## A Possible Workaround
+
+Interestingly, this behavior can be mitigated through configuration alone.
+
+Instead of using a relatively small `cycleTickLimit` limit, we can increase it substantially.
+
+For example, instead of:
+
+```ts
+{
+  cycleTickLimit: 10,
+}
+```
+
+We could use:
+
+```ts
+{
+  cycleTickLimit: 100,
+}
+```
+
+This allows Pulsar to process more ticks before completing its current cycle.
+
+Consequently, the execution context can remain occupied for a longer period before reaching the point where the engine shuts down and schedules another invocation.
+
+In environments with a 60-second execution allowance, this could help Pulsar utilize more of the available execution window within a single execution context.
+
+Of course, the appropriate `cycleTickLimit` value depends on the workload, processing time, and execution timeout of the underlying runtime.
+
+This also makes the configuration particularly important when deploying Pulsar to serverless and edge environments.
+
+## Should This Behavior Change?
+
+I'm intentionally not proposing or implementing a fix at this point.
+
+There are potentially different considerations involved in deciding whether Pulsar should automatically continue executing subsequent tick cycles within the same execution context or preserve its current behavior of shutting down and scheduling another invocation.
+
+For now, I think this is worth documenting as an engineering observation and opening up for discussion.
+
+Some questions worth considering:
+
+- Should Pulsar attempt to execute another tick cycle when the current execution context still has sufficient time available?
+- Should execution lifecycle management be more aware of the underlying runtime's timeout constraints?
+- Should the current behavior remain configuration-driven, leaving users responsible for choosing an appropriate `cycleTickLimit` limit?
+
+These are decisions that I would rather leave open for further discussion.
+
+**For now, the existing behavior remains unchanged.**

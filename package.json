@@ -2,22 +2,23 @@
     "name": "pulsar-monorepo",
     "private": true,
     "workspaces": [
-        "packages/*"
+        "packages/core",
+        "packages/client"
     ],
     "scripts": {
-        "dev:core": "bun --filter @hamim_4444/pulsar dev",
-        "build:core": "bun --filter @hamim_4444/pulsar build",
-        "patch:core": "cd packages/core && npm version patch $(ls -t builds/*.tgz | head -n 1) --access public",
-        "release:core": "cd packages/core && npm publish $(ls -t builds/*.tgz | head -n 1) --access public",
-        
-        "dev:consumer": "bun --filter @hamim_4444/pulsar-consumer dev",
-        "build:consumer": "bun --filter @hamim_4444/pulsar-consumer build",
-        "patch:consumer": "cd packages/consumer && npm version patch $(ls -t builds/*.tgz | head -n 1) --access public",
-        "release:consumer": "cd packages/consumer && npm publish $(ls -t builds/*.tgz | head -n 1) --access public",
-
-        "web": "bun --filter landing dev",
-        "build:web": "bun --filter @hamim_4444/pulsar build",
-
+        "dev:core": "bun --filter @nightx.co/pulsar dev",
+        "build:core": "bun --filter @nightx.co/pulsar build",
+        "patch:core": "cd packages/core && npm version patch",
+        "release:core": "cd packages/core/builds && npm publish --access public",
+        "dev:client": "bun --filter @nightx.co/pulsar-client dev",
+        "build:client": "bun --filter @nightx.co/pulsar-client build",
+        "patch:client": "cd packages/client && npm version patch",
+        "release:client": "cd packages/client/builds && npm publish --access public",
         "build": "bun --filter '*' build"
+    },
+    "dependencies": {
+        "dotenv": "^18.0.9",
+        "drizzle-kit": "^0.31.11",
+        "drizzle-orm": "^0.45.4"
     }
 }

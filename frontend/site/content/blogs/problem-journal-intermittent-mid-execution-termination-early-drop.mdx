@@ -1,0 +1,126 @@
+---
+title: "Problem Journal: Intermittent Mid-Execution Termination (Early Drop) in Pulsar's V8 Isolate Runtime"
+description: "Investigating intermittent early termination in Supabase Edge Functions caused by untracked asynchronous shutdown operations and isolate lifecycle management."
+author: "Hamim"
+date: "2026-11-03"
+tags:
+  - Pulsar
+  - Problem Journal
+  - Early Drop
+  - V8 Isolate
+  - Supabase Edge Runtime
+  - Serverless
+  - Async Lifecycle
+  - Event Bus
+  - Shutdown Management
+  - waitUntil
+  - Self Invocation
+  - Debugging
+---
+
+## 1. Summary
+
+When Pulsar runs on a serverless V8 isolate runtime (Supabase Edge Functions with similar platform behavior on Cloudflare Workers and other edge runtimes), the engine sometimes stops partway through its work and the function terminates without an error. Sometimes a full cycle completes and the self-invocation fires. Other times the function dies after 2–3 ticks or in the middle of the shutdown sequence before the continuation is scheduled. Locally (Supabase Edge Runtime in Docker with the same code and environment), this never happens.
+
+## 2. Environment and Setup
+
+- **Engine:** Pulsar, `runtime: V8_ISOLATE`, using `IsolateRuntime` (`shouldShutdownOnCycleComplete = true`).
+- **Deployment:** Supabase Edge Function (served by `supabase-edge-runtime-1.77.8`, Deno v2.1.4 compatible). The `IsolateInstance` and storage drivers (Redis, Postgres) are created at module top level, outside `fetch`.
+- **Queue:** `q_2`, event-driven pooler (EDP), HTTP consumer, `cycleTickLimit: 10`, `selfInvocationIntervalSec: 5`, `selfInvocationMethod: "auto_using_pgnet"`.
+- **Isolate budget:** `MAX_ISOLATE_LIFESPAN_MS = 180_000`, synced to the clock as approximately 174.5s.
+- **Logging:** A custom logger that sends each log line to BetterStack using an unawaited `fetch`.
+- **Entry point:** `createPulsarRequestHandler(...).handle(req)`, which runs `triggerQueue` and awaits `engine.awaitPendingShutdown()` in a `finally` block.
+
+## 3. Intended Behavior
+
+1. A request arrives (the initial trigger or a self-invocation via pg_net).
+2. The handler acquires the lock and fencing token, builds the engine, and calls `triggerQueue`.
+3. The engine runs ticks until the cycle limit.
+4. `tick:cycle-completed` is emitted, which calls `shutdown()`.
+5. `shutdown()` runs `unifiedTransportManager.shutdownAll()`, then `handleCycleCompletion`, which runs `evaluateDeadRun` and `triggerUrl` to schedule the next invocation in 5 seconds. It then releases or keeps the lock, runs `pingHealthCheck`, and disconnects storage.
+6. The next request arrives approximately 5 seconds later, and the chain continues.
+
+## 4. Observed Symptoms
+
+**Locally:** The isolate ID stays stable across invocations, time tracking and self-invocation work, and every cycle completes.
+
+**Deployed, healthy cycles:**
+
+- 10 ticks, then `Engine Shutdown ⚠️`, followed by `(EDP) : Invoking Self in 5 seconds...`, `[PostgresDriver] : Pool disconnected`, and `[RedisDriver] : TCP Disconnected`.
+- The next request arrives 6–8 seconds later with a new isolate ID and a fresh budget of approximately 174.5 seconds.
+- Each cycle lasts approximately 27 seconds.
+
+**Deployed, bad cycle (the last cycle in the supplied log):**
+
+- Started at `12:26:24.458`, ran 3 ticks, and the log stopped at `12:26:29.625`.
+- No `Engine Shutdown` or `Invoking Self` messages appeared, and no further ticks were executed. The cutoff occurred approximately 5.2 seconds after the start.
+- In an earlier incident, the logs ended immediately after `Engine Shutdown ⚠️`, and the subsequent lines (`Invoking Self`, pool disconnected, TCP disconnected) never appeared.
+- The issue is not reproducible on demand. Some cycles run for their full duration while others terminate early, so different runs behave differently.
+
+**Supabase platform log for the termination:**
+
+```text
+Function shutting down due to: CustomEvent { type: "beforeunload", detail: { reason: "early_drop" } }
+```
+
+This was a plain shutdown event. There was no CPU limit, memory limit, or wall-clock warning.
+
+## 5. Confusing Factors and False Leads
+
+- **Changing isolate IDs:** A new isolate ID on every self-invocation initially looked like a bug. It is expected: the engine ends each worker after approximately 27 seconds by design, so it never ages toward the 174-second budget, and the platform does not reuse the worker.
+- **Local vs. production divergence:** Identical code behaves differently, which pointed toward the platform rather than the engine logic.
+- **pg_net timeout theory:** The bad cycle's cutoff at approximately 5.2 seconds matched pg_net's default 5000ms request timeout. This turned out to be a coincidence, since healthy cycles continued running for 27 seconds, well beyond that mark.
+- **Wall-clock and CPU limit theories:** The platform log showed no such warning, so these were ruled out.
+- **Different data center or region theories:** These did not explain termination in the middle of a request.
+- **Missing logs:** The shutdown-phase logs (pool disconnect and so on) were absent for the bad cycles, which made it look as if the code never ran. Two things were involved: the custom logger's unawaited fetch to BetterStack loses lines when the worker is dropped, and a drop during shutdown means the subsequent code genuinely never runs. This made the failure difficult to identify.
+- **Not a logic bug:** `evaluateDeadRun`, `handleCycleCompletion`, and the lock logic were not the cause. The process was terminated before this code could run.
+
+## 6. Diagnostic Path
+
+1. Read the supplied logs and observed the cycle running through its ticks, with the last cycle cut off without any shutdown logs.
+2. Identified the platform shutdown reason as `early_drop` through the `beforeunload` event.
+3. Read the Supabase troubleshooting documentation on shutdown reasons. It defines `EarlyDrop` as the runtime detecting that the function has finished its work and can be reclaimed: the request has been answered and no tracked asynchronous work remains.
+4. Reviewed `Pulsar.service.ts`, `PulsarBaseService.ts`, `IsolateRuntime.ts`, `PersistentRuntime.ts`, `Tick.module.ts`, `PulsarEventBus.ts`, and `PulsarRequestHandler.ts`.
+
+## 7. Root Cause
+
+The shutdown work is not attached to anything the runtime counts as active work.
+
+1. When the cycle ends, the runtime emits `tick:cycle-completed` through `PulsarEventBus`.
+2. `PulsarEventBus.on` wraps each handler in a listener that calls `handler(...)` and discards the returned promise. `emit` uses `EventTarget.dispatchEvent`, which is synchronous.
+3. The registered handler is `async` and executes `await this.shutdown()`, but nothing outside the listener holds that promise.
+4. `Pulsar` declares `shutdownPromise` and `awaitPendingShutdown()` so the HTTP handler can await shutdown before responding, and `PulsarRequestHandler` calls `await engine.awaitPendingShutdown()` in its `finally` block. However, `shutdownPromise` is never assigned, so that await is effectively a no-op.
+5. As a result, `triggerQueue` returns, the response is sent, and the request ends while `shutdown()` is still in progress (continuation scheduling, health ping, disconnect, and so on).
+6. The runtime sees a completed request with no `waitUntil` promise or other tracked work, so it triggers `early_drop`. The termination occurs in the middle of `shutdown()`.
+
+The window is small and timing-dependent. `shutdown()` takes roughly a second (approximately 1.2 seconds in the healthy logs), and the runtime's idle check is not instantaneous. Sometimes shutdown finishes before the drop occurs and the cycle appears healthy. Other times the drop happens first, and the continuation is never scheduled. This inconsistency is why it was difficult to recognize as a lifecycle issue.
+
+**Related contributing factors:**
+
+- `tick:time-exceeded` and `tick:cycle-completed` can both lead to `shutdown()` being called back to back (`IsolateRuntime.executeTick` emits both), and `shutdown()` is not idempotent.
+- During a mid-shutdown drop, the lock may remain held under the execution ID, and the self-invocation chain breaks until recovery.
+- The unawaited per-line BetterStack logging loses the final log lines when the worker is dropped.
+
+## 8. Why It Appears in Production and Not Locally
+
+The local Supabase Edge Runtime in Docker does not apply the same worker-drop policy, so detached asynchronous work continues running after the response. The deployed platform reclaims the worker as soon as it detects that no tracked work remains. The code is identical, but the lifecycle policies differ.
+
+## 9. Wider Applicability
+
+Other edge and serverless runtimes have the same class of behavior under different names: work that is not tied to the request or an explicit keep-alive mechanism (`waitUntil` and equivalents) can be cancelled once the response is sent.
+
+I have confirmed this behavior for Supabase only. Cloudflare Workers and other providers should be verified against their own documentation, since their shutdown policies and terminology differ.
+
+## 10. Impact
+
+- The self-invocation chain can silently break after any cycle.
+- Locks can remain held, stalling processing until TTL expiry or manual recovery.
+- Messages can be claimed but not delivered or acknowledged, which inflates `read_ct` as visibility timeouts expire.
+- Logs are incomplete precisely when they are needed most.
+- The failure is intermittent and difficult to observe through the application's own logs.
+
+## 11. Verification Signals Used
+
+- The `beforeunload` listener logging `detail.reason`.
+- `[shutdown:start]` and `[shutdown:done]` markers written using `console.log`. A drop between these markers indicates that the early-drop race occurred. A drop after `[shutdown:done]` is normal.
+- Platform logs showing `early_drop` events correlated with missing shutdown logs.

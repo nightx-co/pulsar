@@ -1,0 +1,12 @@
+{
+  "imports": {
+    "postgres": "npm:postgres@^3.4.4",
+    "ioredis": "npm:ioredis@^5.4.1",
+    "@upstash/redis": "npm:@upstash/redis",
+    "js-sha256" : "npm:js-sha256",
+
+    "@hamim_4444/pulsar": "npm:@hamim_4444/pulsar@^1.0.13",
+    "@hamim_4444/pulsar/storage": "npm:@hamim_4444/pulsar@^1.0.13/storage",
+    "@hamim_4444/pulsar/integrations": "npm:@hamim_4444/pulsar@^1.0.13/integrations"
+  }
+}

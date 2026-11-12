@@ -1,0 +1,119 @@
+---
+title: "Pulsar Problem Journal: Mitigating Database Extension Fragility in Multi-Cloud Serverless Architectures"
+description: "Documenting the compatibility limitations of PostgreSQL extensions across managed database providers and their impact on Pulsar's serverless runtime architecture."
+author: "Hamim"
+date: "2026-11-07"
+tags:
+  - Pulsar
+  - Problem Journal
+  - PostgreSQL
+  - PGMQ
+  - PGNET
+  - PGNOTIFY
+  - PGCRON
+  - Serverless
+  - Multi-Cloud
+  - Database Compatibility
+  - Runtime Architecture
+  - Event Transportation
+---
+
+### The assumption that broke
+
+Pulsar's initial runtime architecture was built around the assumption that PostgreSQL extensions such as PGMQ, PGNET, PGNOTIFY, and PGCRON would be available across the major PostgreSQL database providers.
+
+In practice, this assumption does not hold.
+
+Managed PostgreSQL providers have different extension ecosystems. Some extensions are available by default, some can be installed manually, and others are simply unavailable in certain environments. This makes it difficult to build a runtime architecture that depends on a consistent set of database capabilities.
+
+PGMQ is currently the only extension we can reliably treat as a universal component. Even when a provider does not support installing it as a conventional PostgreSQL extension, it can still be installed through the SQL-based approach documented in its GitHub repository.
+
+This gives Pulsar a reliable foundation for its core messaging functionality. However, having PGMQ available does not solve the entire problem. The SDK still needs additional capabilities for scheduling, asynchronous invocation, and event transportation.
+
+### Understanding the serverless constraint
+
+Pulsar supports both persistent and serverless processing runtimes. The serverless category includes conventional serverless virtual machines, such as AWS Lambda, as well as V8 isolate-based environments.
+
+The fundamental difference is how these environments execute work.
+
+A persistent runtime can maintain long-lived TCP connections, listen for database notifications, and continuously process incoming events. A serverless function cannot reliably operate in the same way. Its execution is generally triggered by an external request, and its lifecycle is controlled by the hosting infrastructure.
+
+This distinction becomes important because several of Pulsar's operational mechanisms were originally designed around persistent connections and database-side capabilities.
+
+The challenge is not simply supporting another PostgreSQL provider. It is making the same runtime architecture work when both the database capabilities and the execution model can vary.
+
+### Asynchronous invocation dependency
+
+Pulsar needs the ability to asynchronously invoke a serverless function again after a certain delay. This is an important part of the runtime lifecycle and allows subsequent processing operations to be scheduled without requiring a persistent worker.
+
+When PGNET is available, PostgreSQL can initiate asynchronous HTTP communication directly from the database. Supabase provides this capability, and some other PostgreSQL environments offer similar functionality.
+
+However, Neon does not provide PGNET as a standard available extension. Its availability also cannot be assumed across other managed PostgreSQL providers.
+
+This creates a dependency problem. If Pulsar relies on PostgreSQL to initiate asynchronous HTTP requests, its serverless runtime becomes coupled to the extension ecosystem of the underlying database provider.
+
+Consequently, PGNET cannot be treated as a universal mechanism for serverless function invocation.
+
+### Scheduling dependency
+
+Scheduling introduces another compatibility concern.
+
+Pulsar relies on scheduling capabilities associated with PGCRON, but its requirements go beyond conventional cron execution. Certain parts of the runtime lifecycle require second-level scheduling precision rather than the traditional minute-based scheduling model.
+
+Although some PostgreSQL environments provide PGCRON, others do not support it or cannot satisfy the required scheduling precision.
+
+This means that database-native scheduling cannot be treated as a guaranteed capability either.
+
+The SDK needs to account for environments where the database can provide the messaging functionality through PGMQ but cannot provide the scheduling infrastructure required by the runtime.
+
+### The real-time transportation problem
+
+The persistent runtime uses a Transport Abstraction Layer to communicate between PostgreSQL and the processing runtime.
+
+This works well in environments where the runtime can maintain TCP connections and continuously listen for database notifications through PGNOTIFY or another supported transport mechanism.
+
+However, the same approach does not translate directly to serverless environments.
+
+A serverless function cannot reliably maintain persistent database connections or continuously consume notification streams. Its execution lifecycle does not guarantee that a process will remain alive long enough to behave like a conventional persistent worker.
+
+Neon-specific real-time streaming mechanisms and PGNOTIFY-based listening therefore cannot be treated as universally available serverless transport solutions.
+
+PGNET previously provided another mechanism for this purpose. Database-side events could trigger asynchronous HTTP requests, allowing the serverless runtime to be invoked when something happened.
+
+But when PGNET is unavailable, that mechanism disappears as well.
+
+This leaves a gap in the transport architecture: Pulsar needs a way to react to database-side events without depending on persistent TCP connections or database-side asynchronous HTTP capabilities.
+
+### Where the dependencies converge
+
+At this point, the problem is no longer isolated to individual PostgreSQL extensions.
+
+Each missing capability affects a different part of the serverless runtime:
+
+- **Asynchronous invocation:** The runtime needs a way to reinvoke serverless functions after a delay, without universally depending on PGNET.
+- **Scheduling:** The runtime needs second-level scheduling precision, which cannot be guaranteed through PGCRON across all providers.
+- **Real-time transportation:** The runtime needs to receive or react to database events without relying on persistent connections, PGNOTIFY listeners, or database-side HTTP invocation.
+
+PGMQ addresses the core messaging requirement, but it does not provide these additional operational capabilities.
+
+This distinction is important because database compatibility and runtime compatibility are not the same thing. A database may support Pulsar's messaging layer while still lacking the capabilities required to operate its serverless runtime.
+
+### The actual compatibility boundary
+
+The main architectural issue is that Pulsar's runtime cannot assume a uniform PostgreSQL extension ecosystem.
+
+Supabase provides several database-side capabilities that make the original architecture practical. However, targeting other managed PostgreSQL providers, particularly Neon, exposes the limitations of treating those capabilities as universal dependencies.
+
+The runtime therefore needs to distinguish between capabilities that belong to the database and capabilities that must be provided independently of it.
+
+PGMQ remains the foundation for messaging. Scheduling, asynchronous invocation, and event transportation represent separate operational requirements that need to work across different database environments.
+
+### What needs to be solved
+
+The objective is to preserve Pulsar's serverless runtime functionality without requiring every PostgreSQL provider to offer the same extensions, networking capabilities, or scheduling infrastructure.
+
+The architecture needs to remain compatible with environments where PGMQ is available but PGNET, PGNOTIFY, or PGCRON are not.
+
+Ultimately, Pulsar should be able to use PostgreSQL as its messaging foundation without making the database provider responsible for supplying every operational capability required by the runtime.
+
+That is the compatibility boundary this problem exposes, and the next architectural decisions need to be built around it.

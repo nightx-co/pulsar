@@ -1,0 +1,48 @@
+---
+title: "Solution Journal: Internal WebSocket Transport Adapter in Pulsar"
+description: "Introducing an internal transport adapter to manage WebSocket infrastructure, simplify runtime-specific networking, and improve the developer experience across persistent deployments."
+author: "Hamim"
+date: "2026-10-24"
+tags:
+  - Pulsar
+  - Solution Journal
+  - WebSocket
+  - Transport Adapter
+  - Network Architecture
+  - Bun
+  - Node.js
+  - Deno
+  - Job Dispatch
+  - Developer Experience
+  - Runtime Abstraction
+---
+
+## Context
+
+Resolving WebSocket initialization complexity and improving developer experience (DX) in Pulsar.
+
+## The Solution
+
+Pulsar will internally manage its WebSocket server when configured to use WebSocket-based dispatch in a persistent runtime. Developers will no longer need to create an HTTP server, handle WebSocket upgrades, or manually wire network callbacks into the engine.
+
+Instead, they will configure the dispatch protocol and relevant network settings during engine initialization. Pulsar will manage the underlying network infrastructure itself.
+
+## Architectural Approach: Internal Transport Adapter Pattern
+
+The SDK will encapsulate runtime-specific WebSocket implementations behind an internal transport abstraction.
+
+- **Pulsar engine:** Initializes and manages the WebSocket server on a dedicated port when WebSocket dispatch is enabled.
+- **Transport adapter:** Abstracts the differences between Bun, Node.js, and Deno, keeping runtime-specific implementation details out of the public SDK interface.
+- **Consumer client:** Establishes an outbound WebSocket connection to the Pulsar engine and receives dispatched jobs without hosting its own HTTP server.
+- **Job dispatch:** Once a consumer connects, Pulsar can push jobs through the established connection without creating a new HTTP request for every dispatch.
+- **Developer experience:** Developers configure the engine and initialize their consumer client through the SDK rather than manually implementing the network layer.
+
+## Expected Outcome
+
+This design keeps Pulsar's public API declarative while allowing its internal implementation to handle network initialization, connection management, and runtime-specific differences.
+
+It also preserves the distinction between serverless and persistent deployments: serverless consumers can continue using HTTP dispatch, while persistent consumers can use WebSocket-based dispatch when appropriate.
+
+## Status
+
+Architectural direction selected. The internal transport adapter pattern will guide implementation, while the exact APIs and runtime-specific implementations may evolve during development.

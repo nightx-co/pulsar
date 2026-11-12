@@ -1,0 +1,57 @@
+{
+  "D:\\Development\\Web Development\\Personal\\open-sourced\\pulser\\examples\\multi-runtimes\\lambda\\client\\serverless.yml": {
+    "versionFramework": "4.46.0",
+    "servicePath": "D:\\Development\\Web Development\\Personal\\open-sourced\\pulser\\examples\\multi-runtimes\\lambda\\client\\serverless.yml",
+    "serviceConfigFileName": "serverless.yml",
+    "service": {
+      "org": "nightx",
+      "service": "pulsar-serverless",
+      "provider": {
+        "name": "aws",
+        "runtime": "nodejs20.x"
+      },
+      "plugins": [
+        "serverless-offline"
+      ],
+      "functions": {
+        "lambda-client-example": {
+          "port": 3000,
+          "handler": "src/index.handler",
+          "events": [
+            {
+              "http": {
+                "path": "ack",
+                "method": "post"
+              }
+            },
+            {
+              "http": {
+                "path": "test",
+                "method": "get"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "provider": {
+      "name": "aws",
+      "runtime": "nodejs20.x"
+    },
+    "error": {
+      "message": "You are not a member of the Org \"nightx\". Verify the \"org\" in your Service configuration (e.g. serverless.yml) or that you're providing manually is one your User Account or License Key has access to. Lastly, check the .serverlessrc file in the home directory of your machine to better understand what user account or License Key you are currently using. You can run \"serverless login\" to change the user account or License Key you are using.",
+      "stack": "Error: You are not a member of the Org \"nightx\". Verify the \"org\" in your Service configuration (e.g. serverless.yml) or that you're providing manually is one your User Account or License Key has access to. Lastly, check the .serverlessrc file in the home directory of your machine to better understand what user account or License Key you are currently using. You can run \"serverless login\" to change the user account or License Key you are using.\n    at Authentication.getAuthenticatedData (file:///C:/Users/iC/.serverless/releases/4.46.0/package/dist/sf-core.js:3367:3131)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Authentication.authenticate (file:///C:/Users/iC/.serverless/releases/4.46.0/package/dist/sf-core.js:3369:4342)\n    at async TraditionalRunner.resolveVariablesAndAuthenticate (file:///C:/Users/iC/.serverless/releases/4.46.0/package/dist/sf-core.js:3377:2391)\n    at async TraditionalRunner.run (file:///C:/Users/iC/.serverless/releases/4.46.0/package/dist/sf-core.js:4387:20975)\n    at async route (file:///C:/Users/iC/.serverless/releases/4.46.0/package/dist/sf-core.js:4893:4968)\n    at async Object.run (file:///C:/Users/iC/.serverless/releases/4.46.0/package/dist/sf-core.js:4894:4614)\n    at async run2 (file:///C:/Users/iC/.serverless/releases/4.46.0/package/dist/sf-core.js:4894:6183)"
+    },
+    "serviceRawFile": "org: nightx\r\nservice: pulsar-serverless\r\n\r\nprovider:\r\n    name: aws\r\n    runtime: nodejs20.x\r\n\r\nplugins:\r\n    - serverless-offline\r\n\r\nfunctions:\r\n    lambda-client-example:\r\n        port : 3000\r\n        handler: src/index.handler\r\n        events:\r\n        - http:\r\n            path: ack\r\n            method: post\r\n        - http:\r\n            path: test\r\n            method: get",
+    "command": [
+      "offline",
+      "start"
+    ],
+    "options": {},
+    "serviceProviderAwsCfStackId": null,
+    "serviceProviderAwsCfStackCreated": null,
+    "serviceProviderAwsCfStackUpdated": null,
+    "serviceProviderAwsCfStackStatus": null,
+    "serviceProviderAwsCfStackOutputs": null
+  }
+}

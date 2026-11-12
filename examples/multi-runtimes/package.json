@@ -1,0 +1,30 @@
+{
+    "name": "pulsar-runtimes-example",
+    "private": true,
+    "workspaces": [
+        "bun/*",
+        "lambda/*",
+        "nodejs/*"
+    ],
+    "scripts": {
+        "lambda:client": "cd lambda/client && serverless offline start",
+        "lambda:pulsar": "cd lambda/pulsar && serverless offline start",
+        "bun:client": "cd bun/client && bun run index.ts",
+        "bun:pulsar": "cd bun/pulsar && bun run index.ts",
+        "patch:core": "cd packages/core && npm version patch",
+        "release:core": "cd packages/core && npm publish $(ls -t builds/*.tgz | head -n 1) --access public",
+        "dev:client": "bun --filter @nightx.co/pulsar-client dev",
+        "build:client": "bun --filter @nightx.co/pulsar-client build",
+        "patch:client": "cd packages/client && npm version patch",
+        "release:client": "cd packages/client && npm publish $(ls -t builds/*.tgz | head -n 1) --access public",
+        "web": "bun --filter site dev",
+        "build:web": "bun --filter site build",
+        "build": "bun --filter '*' build"
+    },
+    "dependencies": {
+        "@nightx.co/pulsar": "^1.0.17",
+        "@nightx.co/pulsar-client": "^1.0.6",
+        "dotenv": "^18.0.9",
+        "drizzle-kit": "^0.31.11"
+    }
+}
