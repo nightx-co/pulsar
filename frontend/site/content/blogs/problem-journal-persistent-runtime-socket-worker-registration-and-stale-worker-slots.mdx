@@ -1,0 +1,98 @@
+---
+
+title: "Problem Journal : Persistent Runtime Socket Worker Registration and Stale Worker Slots"
+
+description: An issue in the Persistent Runtime where socket based queue consumers can encounter a startup timing race between tick execution and worker registration. The Tick Controller may execute before workers establish their WebSocket connections resulting in rejected executions and stale worker-slot registrations in Redis. These stale reservations can prevent newly connected workers from immediately processing jobs causing repeated empty ticks until the registrations are released or expire.
+
+author: hamim
+date: 2026-11-12
+tags:
+    - Potential Bug
+    - Worker Lifecycle
+    - Persistent Runtime
+    - Race Condition
+    - Pulsar
+    - Queue Execution
+---
+
+## Problem Context
+
+During the engine boot-up sequence the Tick Controller begins executing interval-driven queues immediately after the runtime and storage infrastructure have been initialized. However, the WebSocket workers responsible for consuming jobs may not have established their connections at this point.
+
+This creates a timing gap between queue execution and worker availability. When the first tick is executed before a worker has registered the scheduler encounters a missing socket consumer connection list and rejects the execution.
+
+## Logs
+
+```tsx
+[EngineRuntime] : Engine Started With No V8 Isolate (2026-11-12T14:17:14.490Z)
+Initialized Persistent Runtime.
+[Network] : Initializing server on port 9500 in [hybrid] mode
+[Network] : WebSocket server handlers attached on port 9500
+➜ Listening on: http://localhost:9500/ (all interfaces)
+[Server] Successfully started and listening on port 9500
+[RedisDriver] : TCP Connected to 127.0.0.1:6379
+[PostgresDriver] : Pool connected with : tcp
+[PulsarStorage] Storage layer active [Strategy: REDIS_CACHE]
+[Configuration] status : [VALID].
+[Persistent Runtime] : Successfully established PostgreSQL notification listener on channel : channel_pulsar_event_driven_queue
+[Tick Controller] : Execution tick mode has been selected with concurrency sequential
+[Tick] : Force stoping tick for queue [q_5] (Trigger Reason : Socket consumer connection list does not exist)
+[Tick] : [q_5] - Rejected, invalid tick run: Socket consumer connection list does not exist for queue 'q_5'.. Please Reconnect Worker ASAP.
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Network] : No active workers listening on queue: q_5
+Pulsar : Health checking ping at (2026-11-12T14:17:14.622Z)
+[Network] : Worker connected: df61efab-2e91-4dee-b807-397a5e5f8c1e
+[Network] : Worker df61efab-2e91-4dee-b807-397a5e5f8c1e registered to queue: q_5
+[Tick] : [q_5] - Empty Tick Executred)
+[Tick] : [q_5] - Empty Tick Executred)
+[Tick] : [q_5] - Empty Tick Executred)
+[Tick] : [q_5] - Empty Tick Executred)
+[Tick] : [q_5] - Empty Tick Executred)
+[Tick] : [q_5] - Empty Tick Executred)
+[Tick] : [q_5] - Empty Tick Executred)
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Pulsar Persistent] : Cycle completed. Resetting state for next execution round.
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+[Tick] : [q_5] - Tick Executred. Total Jobs (10)
+```
+
+In the observed case queue `q_5` initially reported 10 jobs during tick execution followed by a message indicating that no active workers were listening on the queue. The corresponding worker connected shortly afterward and successfully registered itself to `q_5`.
+
+However, worker registration did not immediately restore job execution. Instead the scheduler continued producing empty ticks for several consecutive cycles before normal execution resumed.
+
+## Underlying Cause
+
+The issue appears to originate from the lifecycle of worker-slot registrations maintained in Redis.
+
+During the initial tick execution, the scheduler registers worker slots according to the configured concurrency. Since the socket consumer is not yet available, the dispatch attempt is rejected. However, the worker-slot registrations created during that execution are not necessarily released when this rejection occurs.
+
+Consequently, Redis retains reservations for worker slots that do not have corresponding active consumers.
+
+When the WebSocket worker eventually connects and registers successfully, the scheduler still encounters these previously occupied slots. This prevents the newly connected worker from immediately receiving jobs, even though the network layer correctly identifies it as an active consumer.
+
+The stale registrations remain until they are explicitly cleared or expire through their Redis TTL, which is approximately one minute in the current configuration. During the investigation, manually flushing Redis removed these registrations and normal job execution resumed.
+
+## Queue Execution Context
+
+This behavior is primarily observed with queues configured to use the interval-driven poller. These queues begin their execution cycles as part of the engine's initial scheduling process, making them susceptible to the worker-registration timing gap during startup.
+
+Event-driven queues follow a different execution pattern because their ticks are initiated by incoming events rather than immediately during engine startup. Under normal circumstances, this provides additional time for workers to establish their connections before the first execution occurs.
+
+However, event-driven queues are not inherently exempt from the issue. If an event arrives before the corresponding worker has connected and registered, the same missing-consumer condition and stale worker-slot registration behavior can occur.
+
+## Observed Impact
+
+The primary impact is a temporary loss of job execution capacity despite the presence of successfully connected workers.
+
+The network layer and Redis-backed worker registry can hold conflicting representations of the queue's availability. The network layer considers the worker connected, while the scheduler continues to encounter previously occupied worker slots.
+
+This results in repeated empty tick executions and delayed job processing until the stale registrations are released or expire.
+
+The central problem is the timing dependency between queue execution and worker registration combined with worker-slot reservations that can survive rejected dispatch attempts.
+
+[SOLUTION HERE](./solution-journal-persistent-runtime-socket-worker-lifecyle-and-tick-cordination.mdx)
