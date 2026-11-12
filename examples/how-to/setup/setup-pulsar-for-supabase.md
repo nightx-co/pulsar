@@ -418,10 +418,10 @@ next if you choosed postgres as your primary storage in the unfiied storage and 
 
 ```sql
 -- Old signature took p_now from the app; drop it so nobody can call it by accident.
-DROP FUNCTION IF EXISTS register_workers(VARCHAR, VARCHAR, INT, INT, BIGINT, BIGINT, VARCHAR[]);
-DROP FUNCTION IF EXISTS register_workers(VARCHAR, VARCHAR, INT, INT, BIGINT, VARCHAR[]);
+DROP FUNCTION IF EXISTS pulsar.register_workers(VARCHAR, VARCHAR, INT, INT, BIGINT, BIGINT, VARCHAR[]);
+DROP FUNCTION IF EXISTS pulsar.register_workers(VARCHAR, VARCHAR, INT, INT, BIGINT, VARCHAR[]);
 
-CREATE OR REPLACE FUNCTION register_workers (
+CREATE OR REPLACE FUNCTION pulsar.register_workers (
     p_queue_key VARCHAR,
     p_global_key VARCHAR,
     p_local_concurrency INT,
