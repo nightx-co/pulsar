@@ -1,0 +1,182 @@
+---
+
+title: "Introducing Finite State Machines (FSM) to Pulsar"
+
+description: Introducing Finite State Machines (FSM) into Pulsar's engine to improve state management, coordinate asynchronous subsystem operations, and ensure reliable execution across different runtime environments.
+
+author: hamim
+date: 2026-11-14
+tags:
+    - FSM
+    - Persistent Runtime
+    - State Management
+    - Pulsar
+
+---
+
+## Introducing Finite State Machines to Pulsar
+
+As Pulsar continues to evolve, managing the interactions between its internal subsystems becomes increasingly important. With more features being introduced, the engine needs a reliable way to coordinate operations that depend on one another, particularly when those operations are triggered by asynchronous events.
+
+To address this, we have introduced **Finite State Machines (FSM)** into Pulsar.
+
+The concept behind FSM is relatively simple: instead of allowing different parts of the application to independently determine what should happen next, we maintain an explicit state that represents the current condition of a subsystem. Operations can then make decisions based on that state, while subscribers can react to state transitions.
+
+This gives Pulsar a more structured approach to managing complex state-level decisions and makes it significantly easier to introduce new features without having to build custom state-management classes for every individual operation.
+
+## The Problem: Asynchronous Operations and State Dependencies
+
+Before introducing FSM, several operations within Pulsar relied on independent events to coordinate their execution.
+
+Consider a simplified example involving three events:
+
+- A queue gets registered into the process.
+- The tick controller starts the tick process.
+- A socket consumer connects to the network connection list.
+
+Although these operations are relatively straightforward individually, their execution order is not guaranteed.
+
+For example, a consumer might connect before its corresponding queue has been registered. Similarly, the tick controller might attempt to execute a tick before the worker has established its network connection.
+
+In these situations, the engine could encounter errors, fail to execute the expected operation, or leave a tick process waiting indefinitely for a worker that has not connected yet.
+
+The underlying problem is that these operations have dependencies, but there was no centralized mechanism to represent and enforce those dependencies.
+
+We previously handled such scenarios using custom classes and additional conditional logic for individual state-level operations. However, as the number of subsystems and their interactions increased, maintaining this approach became increasingly difficult.
+
+## The Solution: Explicit State Management with FSM
+
+With FSM, we can represent the lifecycle of a subsystem through a set of explicitly defined states and controlled transitions.
+
+Instead of allowing the tick controller to execute immediately, it first checks the current state of the queue.
+
+For example, when a queue is registered, its initial state becomes `IDLE_WAITING_FOR_WORKERS`. At this point, the tick controller cannot start the tick process because the required workers are not yet available.
+
+Once a worker successfully connects and registers with the corresponding queue, the state transitions to `READY`.
+
+A subscriber listening for state changes can then detect this transition and initiate the tick process.
+
+The same mechanism also works in reverse. When a worker disconnects, the state changes accordingly, allowing the engine to stop or prevent further tick execution before the subsystem encounters an inconsistent state.
+
+This introduces a clear relationship between the availability of resources and the operations that depend on them.
+
+More importantly, incoming events can be coordinated around these state transitions rather than being executed immediately without considering the current condition of the subsystem.
+
+## FSM Implementations in Pulsar
+
+We have successfully integrated FSM into two major subsystems of Pulsar:
+
+1. Execution Profile Switcher
+2. Persistent Runtime Network Connection and Tick Process Synchronization
+
+Both implementations address different problems, but they share the same underlying principle: making subsystem behavior dependent on explicit state transitions.
+
+## 1. Execution Profile Switcher
+
+The Execution Profile Switcher is responsible for dynamically switching a queue's execution profile depending on its recent execution activity.
+
+Consider a queue that continuously executes ticks but does not receive any jobs. If the engine executes ten consecutive empty ticks, this naturally indicates that the queue is unlikely to have incoming work for some time.
+
+Continuing to execute subsequent ticks using the full execution profile would unnecessarily consume resources.
+
+To address this, Pulsar can switch the queue into a more resource-efficient, passive execution profile after a configurable number of consecutive empty ticks.
+
+When new work arrives, the queue can transition back to its original active execution profile.
+
+Previously, this behavior required custom logic to track consecutive empty executions and determine when a profile switch should occur.
+
+With the introduction of `ExecutionProfileSwitcherFSM`, this decision is now represented through explicit state transitions.
+
+The FSM tracks the execution condition of the queue, and once the configured threshold of consecutive empty ticks is reached, it transitions into the corresponding state.
+
+A subscriber listening to these state changes can then determine whether the queue should switch to its active or passive execution profile.
+
+This separates the decision-making process from the actual profile-switching operation. The FSM is responsible for representing the current condition, while subscribers handle the actions associated with that condition.
+
+## 2. Persistent Runtime Network Connection and Tick Process Synchronization
+
+The second implementation addresses a more complex synchronization problem within Pulsar's persistent runtime.
+
+Specifically, this affects queues configured with the `socket` consume worker type.
+
+Unlike other worker configurations, socket-based consumers require an established network connection before they can receive and consume jobs.
+
+However, during the initial boot sequence of a persistent runtime, the tick controller and worker connection lifecycle are not necessarily synchronized.
+
+The tick controller could begin executing ticks before the socket consumer has established its network connection.
+
+As a result, the engine might allocate worker slots in storage even though no actual worker is available to consume the assigned jobs.
+
+These allocations effectively become ghost worker slots, which remain in storage until their respective TTL expires.
+
+Apart from introducing unnecessary storage allocations, this also creates delays in job consumption.
+
+### Introducing QueueFSM
+
+To solve this problem, we introduced `QueueFSM`.
+
+Instead of allowing the tick controller to immediately execute ticks during startup, it must first check the current state of the queue.
+
+By default, the queue starts in the `WAITING_FOR_WORKERS` state.
+
+The state only transitions to `READY` when a worker successfully connects to the network connection list and registers against a valid queue.
+
+Once the queue reaches the `READY` state, the tick controller is allowed to proceed with tick execution.
+
+This ensures that worker availability is established before the engine starts allocating worker slots and attempting to distribute jobs.
+
+However, introducing this synchronization mechanism exposed another problem.
+
+### Handling Event-Driven Queues
+
+In Pulsar, event-driven queues depend on incoming signals to initiate their tick processes.
+
+Unlike continuously executing queues, they do not necessarily execute ticks on a fixed schedule. Instead, an incoming event triggers the execution process.
+
+The problem is that socket worker connection times are not deterministic. Depending on the runtime environment and network conditions, a worker might connect within a few hundred milliseconds or take several minutes.
+
+During this period, the queue remains in the `WAITING_FOR_WORKERS` state.
+
+Imagine an event-driven queue receiving a signal while it is still waiting for its worker connection.
+
+Since the queue is not yet ready, the tick controller cannot execute the tick process. If the incoming signal is simply discarded, the queue might remain idle even after its worker successfully connects, waiting for another signal that may not arrive anytime soon.
+
+This would effectively interrupt the event-driven execution lifecycle.
+
+### Buffering Incoming Signals
+
+To prevent this, we introduced an in-memory event buffer.
+
+Whenever an event-driven queue receives an incoming signal while its state is not `READY`, the signal is temporarily stored in memory instead of being discarded.
+
+Once the worker successfully connects and the queue transitions to `READY`, the engine checks the in-memory buffer for any pending events.
+
+If a buffered event exists, Pulsar initiates the tick process for the corresponding queue.
+
+This ensures that signals received during the worker initialization period are not lost simply because the queue was not ready to execute them at the time.
+
+### Storage-Level Verification
+
+To make this synchronization mechanism even more reliable, we introduced an additional verification step.
+
+After the queue becomes ready and the engine checks its in-memory event buffer, it also checks the underlying queue storage for existing jobs.
+
+If jobs are already available in storage, the engine initiates the tick process for that queue.
+
+This additional check is important because the in-memory buffer alone cannot account for every possible situation in which jobs might already exist in the queue.
+
+By combining state transitions, in-memory event buffering, and storage-level verification, Pulsar can ensure that pending work is not overlooked during the worker initialization lifecycle.
+
+## Conclusion
+
+Introducing Finite State Machines into Pulsar is an important step toward making the engine's internal coordination more predictable and maintainable.
+
+As the engine grows, different subsystems increasingly depend on one another. Managing these dependencies through independent event handlers and custom conditional logic becomes difficult, particularly when execution order is not guaranteed.
+
+FSM provides a centralized way to represent subsystem conditions, control transitions, and notify dependent operations when the system reaches the appropriate state.
+
+With `ExecutionProfileSwitcherFSM` and `QueueFSM`, we have already applied this approach to two important areas of Pulsar: execution profile optimization and persistent runtime synchronization.
+
+More importantly, this implementation establishes a foundation for future features. Instead of introducing another collection of custom classes whenever a new state-dependent operation is required, we can build on the existing state-management approach and let individual subsystems react to well-defined state transitions.
+
+This makes it easier to extend Pulsar while keeping its execution lifecycle and internal coordination consistent.
