@@ -1,0 +1,1 @@
+The run directory is designated exclusively for local testing. It allows for direct local imports to execute tests and runs without requiring a preliminary SDK build and installation cycle.

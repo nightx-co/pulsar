@@ -165,8 +165,8 @@ const Queue1 = createQueue({
 
 #### Available Polling Strategies (`pooler`)
 
-* **`interval-driven-pooler` (IDP):** Ideal for steady, predictable background workloads that require ongoing processing.
-* **`event-driven-pooler` (EDP):** Tailored for instant processing of sporadic or bursty jobs while keeping idle execution costs at absolute zero.
+* `interval-driven-pooler` **(IDP):** Ideal for steady, predictable background workloads that require ongoing processing.
+* `event-driven-pooler` **(EDP):** Tailored for instant processing of sporadic or bursty jobs while keeping idle execution costs at absolute zero.
 
 #### Available Polling Profiles (`profile`)
 
@@ -177,11 +177,6 @@ You can pass a predefined string preset or supply a custom `TimingProfile` objec
 * `'BALANCED'`
 * `'RELAXED'`
 * `'ULTRA_EFFICIENT'`
-
-
-
-
-
 
 ### 4. Initialize the Engine
 
@@ -195,7 +190,7 @@ const engine = new Pulsar({
   queues: [Queue1],
 
   apiKey: process.env.PULSAR_API_KEY,
-  instanceId: crypto.randomUUID(),
+  instanceId: 'your-instance-id-exm:edge-instance-1',
 
   swarmConfig: {
     maxGlobalConcurrency: 1000,
@@ -241,6 +236,7 @@ For containerized or stateless serverless environments with predictable executio
 For short-lived, ephemeral V8 isolate environments such as Cloudflare Workers, Supabase Edge Functions, and Deno Deploy. Incoming requests share the same warm memory space until the isolate shuts down. The engine relies on a required `isolate` instance to monitor remaining isolate lifespan, handle dynamic global state, and sync tick schedules before the V8 isolate gets terminated by the cloud provider.
 
 ---
+
 ## Configuration Reference by Runtime
 
 Depending on your selected `runtime`, the required and available configuration keys change.

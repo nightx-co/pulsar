@@ -2,8 +2,7 @@
     "name": "pulsar-monorepo",
     "private": true,
     "workspaces": [
-        "packages/core",
-        "packages/client"
+        "packages/*"
     ],
     "scripts": {
         "dev:core": "bun --filter @nightx.co/pulsar dev",
@@ -20,5 +19,8 @@
         "dotenv": "^18.0.9",
         "drizzle-kit": "^0.31.11",
         "drizzle-orm": "^0.45.4"
+    },
+    "devDependencies": {
+        "vitest": "^5.1.0"
     }
 }
