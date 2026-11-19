@@ -1,0 +1,126 @@
+---
+title: "Debugging a WebSocket Handshake Failure in the Pulsar Client"
+description: "A stack overflow, a generic 'non-101' error, and a Node-only WebSocket incompatibility that appeared only after building the SDK, and the runtime-aware fix."
+author: "NightX"
+date: "2026-11-19"
+tags: ["Pulsar", "Debugging", "WebSocket", "Node.js", "Bun", "Deno", "SDK"]
+---
+
+## Overview
+
+The Pulsar consumer worked perfectly from source. After we built it into an SDK and installed it in a separate app, receiving jobs crashed the process:
+
+```text
+Exception in PromiseRejectCallback:
+RangeError: Maximum call stack size exceeded
+```
+
+Same engine, URL, storage, API key, and worker config. The only difference was the build. This post covers what we suspected, what was actually wrong, and the fix.
+
+## 1. Suspecting the build
+
+The SDK is built with `Bun.build` using `splitting: true`, which we need so shared modules (like the storage layer) stay single instances across entry points. `crossws` and `@msgpack/msgpack` were marked `external`.
+
+The printed error pointed at a minified chunk containing MessagePack's `utf8Encode` helpers. That made MessagePack and code splitting look guilty. It was a red herring: in a minified bundle the "line" is a whole file, so the snippet was just whatever sat next to the exception. The `RangeError` itself was thrown from Node's `PromiseRejectCallback`, so the trace showed the stack after it was already exhausted, not where it started.
+
+## 2. The reconnect loop
+
+Logging the socket events showed this repeating roughly every 0.15 ms:
+
+```text
+ErrorEvent { type: 'error', ..., timeStamp: 582.2598 }
+ErrorEvent { type: 'error', ..., timeStamp: 582.5624 }
+```
+
+Something was re-triggering the error handler synchronously. Our handlers acted on every error immediately, with no check that the event came from the current socket and no backoff on reconnects, so each failure started another attempt right away. We fixed the lifecycle:
+
+```ts
+socket.onerror = (event) => {
+  if (this.socket !== socket) return; // ignore stale sockets
+  this.logger.error("[Worker] socket error:", event?.message ?? "unknown");
+
+  if (socket.readyState === 3) { // CLOSED
+    this.isConnected = false;
+    this.scheduleReconnect(); // exponential backoff, capped at 30s
+  }
+};
+```
+
+We also removed a duplicate `new WebSocket(...)` in the constructor, wrapped message handling in `try/catch`, and stopped calling `close()` from `onerror`. The crash stopped, but the connection still failed.
+
+## 3. The real error
+
+With the loop gone, one message remained:
+
+```text
+socket error: Received network error or non-101 status code.
+```
+
+HTTP 101 means `Switching Protocols`, the response that accepts a WebSocket upgrade. This message doesn't say the server returned something else. It says the client didn't complete a valid handshake, and it hides the actual reason.
+
+We spent hours on TLS certificates, `wss://` versus `ws://`, headers, API keys, and `localhost` resolving to IPv6. None of it helped.
+
+## 4. Splitting the problem in half
+
+A raw upgrade request proved the server was healthy:
+
+```bash
+curl -i -N http://127.0.0.1:4500/ \
+  -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=="
+```
+
+```text
+HTTP/1.1 101 Switching Protocols
+```
+
+(Our first attempt returned `400` because the key we used decoded to 13 bytes, and a valid key must be 16. Test commands can be wrong too.)
+
+So the failure was in the client.
+
+## 5. The cause: server-side trust, client-side assumption
+
+The Pulsar engine uses `crossws` for its server, and we had verified it on Node, Bun, and Deno. We assumed the `crossws` client would behave the same way. But `crossws/websocket` doesn't ship its own client. It resolves to the platform's `WebSocket`, which on modern Node (since 21) is the built-in client backed by undici.
+
+The source run most likely used Bun's client, which connected fine. The built SDK ran on Node, where the built-in client failed against the same server. Newer undici versions attach the real reason to `error.cause`, and we never extracted it, so we can't name the exact undici behavior. We can say that replacing the client removed the failure, and it has held across repeated tests.
+
+## 6. The fix: choose the client per runtime
+
+We isolated the choice in one small factory. Bun and Deno use `crossws/websocket`, and Node uses the `ws` package:
+
+```ts
+export async function createSocket(url: string): Promise<WebSocket> {
+  const g = globalThis as any;
+
+  if (typeof g.Bun !== "undefined" || typeof g.Deno !== "undefined") {
+    const mod = await import("crossws/websocket");
+    const CrosswsWS = (mod.default ?? mod) as unknown as typeof WebSocket;
+    return new CrosswsWS(url);
+  }
+
+  const mod = await import("ws");
+  const NodeWebSocket = (mod.default ?? mod) as unknown as typeof WebSocket;
+  return new NodeWebSocket(url);
+}
+```
+
+The worker only uses the standard WebSocket API (`onopen`, `onmessage`, `onclose`, `onerror`, `send`), so nothing else changed. `ws` is marked `external` in the build. We didn't need to touch `splitting` or the storage layout.
+
+## Results
+
+| Problem | Resolution |
+|---|---|
+| `Maximum call stack size exceeded` | Stale-socket checks, state-aware reconnects, and exponential backoff |
+| Rapid repeated error events | No immediate reconnect from `onerror`; reconnect only on a closed state |
+| `Received network error or non-101 status code` | Replaced the Node client with `ws` via a runtime-aware factory |
+
+## Lessons
+
+1. **Minified traces mislead.** The code printed beside an error isn't necessarily the cause. Use `node --enable-source-maps` early.
+2. **Test the server and client separately.** A raw `curl` upgrade request splits the problem in seconds.
+3. **Verifying a server on every runtime says nothing about the client.** Evaluate each side on its own.
+4. **`external` doesn't make behavior runtime-neutral.** What a package does still depends on where the SDK is installed.
+5. **Reconnect logic needs lifecycle discipline.** Ignore stale sockets, never reconnect synchronously from an error, and always back off.
+6. **Log `error.cause`.** Generic wrappers hide the real reason.
+7. **Don't change a needed build option without evidence.** `splitting: true` looked suspicious but was never the problem.
