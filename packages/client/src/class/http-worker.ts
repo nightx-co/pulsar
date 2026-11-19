@@ -5,6 +5,18 @@ import { Job } from "./Job";
 
 import type { IWorkerTransport, HttpWorkerOptions, Processor, IBatchCandidate } from "../types/worker.types";
 
+/**
+ * HTTP-based queue worker that receives and processes batches of jobs through
+ * an HTTP dispatch endpoint.
+ *
+ * `HttpWorker` validates incoming dispatch requests, authenticates them using an
+ * instance ID and API key, converts the received batch into `Job` instances, and
+ * delegates processing to the shared worker pipeline. Job acknowledgments,
+ * rejections, retries, and worker deregistration are persisted through the
+ * configured Pulsar storage backend.
+ *
+ * @template T - The expected payload type for each processed job.
+ */
 export class HttpWorker<T = any> extends BaseWorker<HttpWorkerOptions> {
     
     protected override transport : IWorkerTransport = this;

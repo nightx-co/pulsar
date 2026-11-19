@@ -6,8 +6,16 @@ import { parseAnyPayload } from "../helpers/parseAnyPayload";
 import type { DependentWorkerOptions, IBatchCandidate, IWorkerTransport, Processor } from "../types/worker.types";
 
 /**
- * awd
-*/
+ * A worker implementation for processing dependent/batch jobs through a remote
+ * queue proxy.
+ *
+ * `DependentWorker` receives a batch of jobs, converts each raw job payload into
+ * a `Job` instance, and delegates them to the configured processor. It also
+ * provides lifecycle controls for acknowledging, rejecting, retrying, and
+ * deregistering jobs or workers by sending MessagePack-encoded proxy requests.
+ *
+ * @template T - The expected payload type for each processed job.
+ */
 export class DependentWorker<T = any> extends BaseWorker<DependentWorkerOptions> {
     protected override transport : IWorkerTransport = this;
 

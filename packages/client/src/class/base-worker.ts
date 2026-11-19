@@ -2,6 +2,19 @@ import { LoggerService } from "../utils/LoggerService";
 import type { BaseOptions, IWorkerTransport, Processor } from "../types/worker.types";
 import type { Job } from "./Job";
 
+/**
+ * Abstract base class that provides shared job-processing behavior for queue workers.
+ *
+ * `BaseWorker` validates worker options, processes a batch of jobs with configurable
+ * concurrency, attaches acknowledgment (`ack`), rejection (`nack`), and retry event
+ * handlers to each job, and dispatches deferred lifecycle actions after a processing
+ * cycle completes.
+ *
+ * Concrete worker implementations must supply an `IWorkerTransport`, which handles
+ * the actual connection and queue communication.
+ *
+ * @template TOptions - The worker-specific options type, extending `BaseOptions`.
+ */
 export abstract class BaseWorker<TOptions extends BaseOptions = BaseOptions> {
     protected abstract readonly transport : IWorkerTransport;
     protected readonly logger : LoggerService;

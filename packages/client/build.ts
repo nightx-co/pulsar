@@ -19,7 +19,7 @@ async function runBuild() {
         minify: true,
         
         loader: { ".lua": "text" },
-        external: ["redis", "ioredis", "postgres", "eventemitter3", "crossws", "srvx", "msgpack"],
+        external: ["redis", "ioredis", "postgres", "eventemitter3", "crossws", "srvx", "@msgpack/msgpack", "typescript", "ws"],
 
         splitting: true,   // crucial for shared modules chunks.
 
