@@ -1,9 +1,9 @@
 import EventEmitter from "eventemitter3";
 
-export class Job<T = any> extends EventEmitter {
+export class Job<T = unknown> extends EventEmitter {
     public defferedStates : { action : 'ack' | 'retry' | 'nack', id : number }[] = [];
 
-    constructor(public id : number, public data : T) {
+    constructor(public id : number, public headers : Record<string, any>, public data : T) {
         super();
     }
 

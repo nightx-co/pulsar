@@ -1,1 +1,1 @@
-the 'run' folder is only for local testing, any local test and runs are normaly performed here via direct local import as it does not require to first build the sdk and then install and import
+Use the run directory exclusively for local testing and execution. Direct local imports are standard here, avoiding the overhead of building and installing the SDK prior to each run.

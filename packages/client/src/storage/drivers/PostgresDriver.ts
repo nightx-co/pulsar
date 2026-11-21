@@ -56,7 +56,7 @@ export class PostgresDriver implements IPulsarDriver {
             await this.sql`SELECT 1`;
             return { status: "up", latencyMs: Date.now() - start };
         }
-        catch (err: any) {
+        catch (err : any) {
             return { status: "down", latencyMs: Date.now() - start, details: { error: err.message } };
         }
     }

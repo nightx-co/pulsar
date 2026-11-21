@@ -34,7 +34,7 @@ export class HttpWorker<T = any> extends BaseWorker<HttpWorkerOptions> {
         const url = new URL(parsedRequest.url);
 
         if(url.pathname.endsWith('/dispatch')) {
-            const { batch, worker_id } = parsedRequest.body as IBatchCandidate;
+            const { batch, worker_id } = parsedRequest.body as IBatchCandidate<T>;
             const headers = parsedRequest.headers;
             
             const instanceId = headers['x-instance-id'] as string;
@@ -67,7 +67,7 @@ export class HttpWorker<T = any> extends BaseWorker<HttpWorkerOptions> {
                 this.instanceIdAsiggned = true;
             }
 
-            const jobs = batch.map((job) => new Job(job.msg_id, job));
+            const jobs = batch.map((job) => new Job(job.msg_id, job.headers, job.message));
 
             return this.handleProcesses(worker_id, jobs, processor);
         }

@@ -26,9 +26,9 @@ export class DependentWorker<T = any> extends BaseWorker<DependentWorkerOptions>
     public async handle (req : any, processor : Processor<T>) {
         const parsedRequest = await parseAnyPayload(req);
         
-        const { batch, worker_id } = parsedRequest.body as IBatchCandidate;
+        const { batch, worker_id } = parsedRequest.body as IBatchCandidate<T>;
 
-        const jobs = batch.map((job) => new Job(job.msg_id, job));
+        const jobs = batch.map((job) => new Job(job.msg_id, job.headers, job.message));
 
         await this.handleProcesses(worker_id, jobs, processor);
     }

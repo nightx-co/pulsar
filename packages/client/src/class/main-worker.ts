@@ -3,9 +3,9 @@ import { decode } from '@msgpack/msgpack';
 import { Job } from "./Job";
 import { BaseWorker } from "./base-worker";
 import { PulsarUnifiedStorage } from "../storage/PulsarStorage";
-import { createSocket } from '../helpers/createSocket';
 
 import type { IBatchCandidate, IWorkerTransport, Processor, WorkerOptions } from "../types/worker.types";
+import { createSocket } from '../helpers/createSocket';
 
 export class Worker<T = any> extends BaseWorker<WorkerOptions> {
     
@@ -62,9 +62,8 @@ export class Worker<T = any> extends BaseWorker<WorkerOptions> {
             await this.onMessage(event);
         }
 
-        socket.onclose = async (err) => {
+        socket.onclose = async () => {
             if (this.socket !== socket) return;
-            this.logger.error(err);
             this.isConnected = false;
             this.scheduleReconnect();
         }
@@ -120,10 +119,10 @@ export class Worker<T = any> extends BaseWorker<WorkerOptions> {
                 }
 
                 if(eventType === "DISPATCH_BATCH") {
-                    const { batch, worker_id } = decodedPayload.data as IBatchCandidate;
+                    const { batch, worker_id } = decodedPayload.data as IBatchCandidate<T>;
 
                     if (batch && Array.isArray(batch)) {
-                        const jobs = batch.map((job) => new Job(job.msg_id, job));
+                        const jobs = batch.map((job) => new Job<T>(job.msg_id, job.headers, job.message));
                         await this.handleProcesses(worker_id, jobs, this.processor);
                     }
                 }

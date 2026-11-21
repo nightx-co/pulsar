@@ -37,11 +37,11 @@ export class RedisQueueRepository extends BaseQueueRepository {
         await pipeline.exec();
     }
 
-    public override async pauseQueue(queue: string, period: string) {
+    public override async pauseQueue(queue : string, period : string) {
         
     }
 
-    public override async resumeQueue(queue: string, period: string) {
+    public override async resumeQueue(queue : string, period : string) {
         
     }
 

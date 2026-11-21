@@ -1,6 +1,14 @@
 import { LoggerService } from "../utils/LoggerService";
-import type { BaseOptions, IWorkerTransport, Processor } from "../types/worker.types";
+import type { BaseOptions, ConsumerJob, IWorkerTransport, Processor } from "../types/worker.types";
 import type { Job } from "./Job";
+
+type DeferredAction = 'ack' | 'retry' | 'nack';
+
+const ACTION_LABELS : Record<DeferredAction, string> = {
+    ack : 'acknowledged',
+    nack : 'rejected (nack)',
+    retry : 'sent back to the queue for retry',
+}
 
 /**
  * Abstract base class that provides shared job-processing behavior for queue workers.
@@ -30,107 +38,136 @@ export abstract class BaseWorker<TOptions extends BaseOptions = BaseOptions> {
         this.options.concurrency = this.options.concurrency ?? 1;
         this.options.removeOnComplete = this.options.removeOnComplete ?? true;
         this.options.removeOnFail = this.options.removeOnFail ?? false;
+
+        const { concurrency } = this.options;
+        if (!Number.isInteger(concurrency) || concurrency < 1) {
+            throw new RangeError(`Worker option "concurrency" must be a positive integer (received ${concurrency}).`);
+        }
+    }
+
+    private get tag() : string {
+        return `[Worker:${this.queueName}]`;
     }
 
     public async handleProcesses (workerId : string, jobs : Job[], processor : Processor) {
         await this.transport.connect();
 
         const queue = [...jobs];
-        const maxConcurrency = this.options.concurrency ?? 1;
-        let iterationIndex = 0;
+        const concurrency = Math.min(this.options.concurrency ?? 1, Math.max(jobs.length, 1));
+        let nextIndex = 0;
+        let failedCount = 0;
+
+        this.logger.log(
+            jobs.length === 0
+                ? `${this.tag} Worker ${workerId} received no jobs. Nothing to process.`
+                : `${this.tag} Worker ${workerId} picked up ${jobs.length} job(s) (concurrency: ${concurrency}).`
+        )
 
         const workerPool = async () => {
             while (queue.length > 0) {
                 const job = queue.shift();
                 if (!job) return;
 
-                const cleanup = await this.attachEventAction(job);
+                const index = nextIndex++;
+                const { cleanup, settled } = this.attachEventActions(job);
+                const consumerJob = this.createConsumerJob(job);
 
                 try {
-                    await processor(job, iterationIndex);
+                    await processor(consumerJob, index);
                 }
                 catch (err) {
-                    this.logger.error(`[Worker] Job ${job.id} threw an unhandled error:`, err);
+                    failedCount++;
+                    this.logger.error(
+                        `${this.tag} Job ${job.id} failed with an unhandled error. ` +
+                        `It was not acknowledged and will become available again once its visibility timeout expires.`,
+                        err
+                    )
                 }
                 finally {
-                    iterationIndex++;
                     cleanup();
+                    await settled();
                 }
             }
         }
 
-        const workers = Array.from({ length: maxConcurrency }, () => workerPool());
-        await Promise.all(workers);
+        try {
+            await Promise.all(Array.from({ length : concurrency }, () => workerPool()));
+        }
+        finally {
+            try {
+                await this.transport.deregister(workerId);
+            }
+            catch (err) {
+                this.logger.error(`${this.tag} Failed to deregister worker ${workerId}:`, err);
+            }
 
-        await this.transport.deregister(workerId);
+            await this.dispatchDeferredActions(jobs);
 
-        await this.onComplete(jobs);
+            this.logger.log(`${this.tag} Worker ${workerId} finished its batch: ` + `${jobs.length - failedCount} succeeded, ${failedCount} failed.`);
+        }
     }
 
-    private async attachEventAction(job : Job) {
-        const onAck = async () => {
-            this.logger.log(`[Job ${job.id}] Acknowledged`);
-            await this.transport.ack(this.queueName, job.id);
+    private createConsumerJob<T>(job : Job<T>) : ConsumerJob<T> {
+        return Object.freeze({
+            id : job.id,
+            data : job.data,
+            headers : job.headers,
+            ack : (...args : Parameters<Job<T>['ack']>) => job.ack(...args),
+            nack : (...args : Parameters<Job<T>['nack']>) => job.nack(...args),
+            retry : (...args : Parameters<Job<T>['retry']>) => job.retry(...args),
+        })
+    }
+
+    private attachEventActions(job : Job) {
+        const pending : Promise<void>[] = [];
+
+        const handle = (action : DeferredAction) => () => {
+            const task = this.transport[action](this.queueName, job.id)
+                .then(() => this.logger.log(`${this.tag} Job ${job.id} ${ACTION_LABELS[action]}.`))
+                .catch((err : unknown) => this.logger.error(`${this.tag} Failed to apply "${action}" to job ${job.id}:`, err))
+            
+            pending.push(task);
         }
 
-        const onNack = async () => {
-            this.logger.log(`[Job ${job.id}] Nacked`);
-            await this.transport.nack(this.queueName, job.id);
-        }
-
-        const onRetry = async () => {
-            this.logger.log(`[Job ${job.id}] Retrying`);
-            await this.transport.retry(this.queueName, job.id);
-        }
+        const onAck = handle('ack');
+        const onNack = handle('nack');
+        const onRetry = handle('retry');
 
         job.once("ack", onAck);
         job.once("nack", onNack);
         job.once("retry", onRetry);
 
-        return () => {
-            job.off("ack", onAck);
-            job.off("nack", onNack);
-            job.off("retry", onRetry);
+        return {
+            cleanup : () => {
+                job.off("ack", onAck);
+                job.off("nack", onNack);
+                job.off("retry", onRetry);
+            },
+            settled : async () => { await Promise.all(pending); }
         }
     }
 
-    private async onComplete(jobs : Job[]) {
-        await this.dispatchDefferedActions(jobs);
+    private async dispatchDeferredActions(jobs : Job[]) {
+        const idsByAction = new Map<DeferredAction, number[]>();
 
-        this.logger.log(`cycle completed`);
-    }
-    
-    private async dispatchDefferedActions(jobs : Array<Job>) {
-        const batchedDefferedActions : { action : 'ack' | 'retry' | 'nack', id : number }[] = [];
-        jobs.map(job => batchedDefferedActions.push(...job.defferedStates));
+        for (const { action, id } of jobs.flatMap(job => job.defferedStates)) {
+            const ids = idsByAction.get(action);
+            if (ids) ids.push(id);
+            else idsByAction.set(action, [id]);
+        }
 
-        this.logger.log(`acknoledging : ${jobs.length} deffered jobs`);
+        if (idsByAction.size === 0) return;
 
-        const groupByActions = new Map<'ack' | 'retry' | 'nack', number[]>();
+        const summary = [...idsByAction].map(([action, ids]) => `${ids.length} ${action}`).join(', ');
+        this.logger.log(`${this.tag} Applying deferred actions: ${summary}.`);
 
-        batchedDefferedActions.forEach(current => {
-            if (!groupByActions.has(current.action)) {
-                groupByActions.set(current.action, []);
+        for (const [action, ids] of idsByAction) {
+            try {
+                await this.transport[action](this.queueName, ids);
+                this.logger.log(`${this.tag} ${ids.length} job(s) ${ACTION_LABELS[action]}.`);
             }
-            groupByActions.get(current.action)!.push(current.id);
-        })
-
-        for (const [action, ids] of groupByActions.entries()) {
-            switch (action) {
-                case "ack":
-                    this.logger.log(`acknowledging ${ids.length} items.`);
-                    await this.transport.ack(this.queueName, ids);
-                    break;
-            
-                case "nack":
-                    this.logger.log(`nacknowledging ${ids.length} items.`);
-                    await this.transport.nack(this.queueName, ids);
-                    break;
-
-                case "retry":
-                    this.logger.log(`retrying ${ids.length} items.`);
-                    await this.transport.retry(this.queueName, ids);
-                    break;
+            catch (err) {
+                this.logger.error(`${this.tag} Failed to apply deferred "${action}" to ${ids.length} job(s) (ids: ${ids.join(', ')}):`, err);
             }
         }
     }

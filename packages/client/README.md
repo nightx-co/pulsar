@@ -38,7 +38,7 @@ import {
     Worker,
     HttpWorker,
     DependentWorker,
-} from " @nightx.co/pulsar-client";
+} from "@nightx.co/pulsar-client";
 ```
 
 ### Storage components
