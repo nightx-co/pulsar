@@ -5,7 +5,7 @@ We will start by importing the `DependentWorker` class.
 ```typescript
 import {
   DependentWorker,
-} from "npm:@nightx.co/pulsar-client/class";
+} from "@nightx.co/pulsar-client/class";
 ```
 
 The `DependentWorker` is significantly slower and is generally not recommended. However, if storage cannot be initialized on the consumer side, it may be the most practical approach.
@@ -36,7 +36,6 @@ The `DependentWorker` can be initialized either outside or inside the request ha
 ```typescript
 const dependentWorker = new DependentWorker(queue, {
   apiKey: API_KEY,
-  storage: unifiedStorage,
   concurrency: 1,
   logger, // A custom logger can be integrated in the same way as the Pulsar engine
   connection: {
@@ -119,13 +118,13 @@ Reference:
 import { waitUntil } from "@vercel/functions";
 
 export async function POST(req : Request) {
-    waitUntil(async () => {
-        await dependentWorker.handle(request, async (job) => {
+    waitUntil(
+        dependentWorker.handle(req, async (job) => {
             // Job action
         })
-    })
+    )
 
-    return Response('Success', { status: 200 });
+    return new Response('Success', { status: 200 });
 }
 
 ```
@@ -142,7 +141,7 @@ import type { Context } from "@netlify/functions";
 export default async (req: Request, context: Context) => {
   // Pass a background promise to waitUntil
   context.waitUntil(
-    dependentWorker.handle(request, async (job) => {
+    dependentWorker.handle(req, async (job) => {
         // Job action
     })
   );

@@ -94,7 +94,7 @@ Next, define the following three variables.
 // For edge runtimes, MAX_ISOLATE_LIFESPAN_MS must match
 // the wall-clock time provided by the runtime.
 
-const MAX_ISOLATE_LIFESPAN_MS = 180_000;
+const MAX_ISOLATE_LIFESPAN_SEC = 149;
 
 // Instance ID for this Pulsar instance.
 //
@@ -121,9 +121,7 @@ This creates an isolate instance whose variables and data remain the same across
 The `IsolateInstance` must be initialized outside the handler function.
 
 ```typescript
-const isolate = new IsolateInstance(
-    MAX_ISOLATE_LIFESPAN_MS,
-);
+const isolate = new IsolateInstance(MAX_ISOLATE_LIFESPAN_SEC);
 ```
 
 ### Create a Queue
@@ -154,8 +152,8 @@ export const orderQueue = createQueue({
         type: "http",
         url: "your_consumer_function_url",
         headers: {
-            "Authorization": `Bearer SUPABASE_ANON_KEY`, -- on supabase
-            "X-Amz-Invocation-Type" : "Event" -- on lambda
+            "Authorization": `Bearer SUPABASE_ANON_KEY`, // on supabase
+            "X-Amz-Invocation-Type" : "Event" // on lambda
         },
     },
 });
@@ -303,11 +301,8 @@ Deno.serve(async (req: Request) => {
     // EdgeRuntime.waitUntil() if possible.
     // A normal request handler will also work.
 
-    EdgeRuntime.waitUntil(() => {
-        await requestHandler.handle(req);
-    });
-
-    const { message, status } = await requestHandler.handle(req);
+    const handlerPromise = requestHandler.handle(req);
+    EdgeRuntime.waitUntil(handlerPromise);
 
     return new Response(JSON.stringify({ message }), {
         headers: {
