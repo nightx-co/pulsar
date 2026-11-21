@@ -1,0 +1,38 @@
+# Note: This configuration YAML is not loaded or utilized by the standard version of Pulsar Engine. 
+# It is designed specifically for and currently used exclusively by LinkScribe's modified Pulsar Engine distribution.
+
+triggerHealthCheckOnConsecutiveEmptyTickExecution: true
+healthCheckOnConsecutiveEmptyTickExecutionThreshold: 10
+diagnoseStorageDrivers: true
+shouldStopTickProcessOnConsecutiveEmptyTickExecution: true
+stopTickProcessOnConsecutiveEmptyTickExecutionThreshold: 5
+consecutiveEmptyTickExecutionQueryQueueServiceDirect: true
+shouldValidateTickBeforeExecution: true
+abortTickIfNoActiveSocketConnection: true
+socketServerInitializationMethod: "on_engine_initialization"
+putTickInPendingWhenNoActiveSocketConnection: true
+pendingSocketConnectionDuration: 5000
+allowDeferredTickExecution: true
+maxDeferredTickScheduleTimeMs: 5000
+syncWorkerConnectionsInRuntimeStorage: true
+emitEventOnRuntimeCycleComplete: true
+restartDaemonProcessOnRestartRequest: true
+selfRestartPolicyInPersistentRuntime: true
+socketWorkerAuthenticationMethod: "jwt"
+socketWorkerAuthenticationRequired: true
+httpWorkerAuthenticationMethod: "jwt"
+httpWorkerAuthenticationRequired: true
+enableStreamEvents: true
+internalStreamingMethod: "event_bus"
+ignoreGlobalCycleTickLimit: true
+overrideGlobalCycleTickLimit: true
+overrideTickConcurrency: true
+autoTransitionToPollingModeInPersistentRuntimeForEdpTriggerStrategy: true
+httpServerAuthentication: true
+httpServerCorsAllowedAll: true
+httpServerCorsEnabled: true
+httpServerRequestResponseEncryption: true
+httpServerRequestEncryptionMethod: "aes"
+socketServerAuthentication: true
+socketServerRequestResponseEncryption: true
+socketServerRequestEncryptionMethod: "aes"
