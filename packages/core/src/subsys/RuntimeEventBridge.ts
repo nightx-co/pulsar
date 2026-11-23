@@ -75,7 +75,7 @@ export class RuntimeEventBridge {
                     }
                 }
             }
-        }, config.get("engine.poolingIntervalMS"));
+        }, config.get("engine.poolingIntervalMS") ?? 5000);
     }
 
     public async httpEventDrivenQueueTrigger(queueName : string, fencingToken : string, ctx : IRuntimeExecutionContext) {

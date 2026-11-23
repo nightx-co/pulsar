@@ -150,7 +150,7 @@ export abstract class PulsarRuntimeCore implements IPulsarRuntime {
         }
 
         else if (typeof selfInvocationMethod === "object" && selfInvocationMethod !== null && selfInvocationMethod.method === "manual") {
-            await selfInvocationMethod.handler(url);
+            await selfInvocationMethod.handler(url, headers);
         }
 
         return state;

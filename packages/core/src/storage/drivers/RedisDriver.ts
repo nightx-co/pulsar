@@ -54,7 +54,7 @@ export class RedisDriver implements IPulsarDriver {
 
             if (this.tcpClient.status === "wait") {
                 await this.tcpClient.connect();
-                this.logger.log(`[RedisDriver] : TCP Connected to ${this.options.connectionString}`);
+                this.logger.log(`[RedisDriver] : TCP Connected.`);
             }
         }
         else if(this.options.protocol == "http") {

@@ -35,13 +35,13 @@ export class ConfigurationStore {
         const engineInterventionPolicy = baseConfig.engine?.interventionPolicy ?? 'disabled';
 
         this._config = {
+            ...baseConfig,
             swarmConfig : {
                 globalMaxJobsPerTick : 100_000,
                 maxGlobalConcurrency : 10_000,
                 spawnerAlgorithm : "ROUND_ROBIN",
                 ...baseConfig.swarmConfig,    
             },
-            ...baseConfig,
             engine: {
                 ...(baseConfig.runtime == PulsarRuntime.PERSISTENT ? {
                     poolingIntervalSec : 5

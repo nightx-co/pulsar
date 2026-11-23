@@ -103,22 +103,27 @@ export class ServerlessRuntime extends PulsarRuntimeCore {
 
                 this.logger.log(`[Scheduler] : Scheduled tick execution request`, `${(inTheFutureSeconds).toFixed(2)}s`);
 
-                if(pooler === "event-driven-pooler") {
-                    const continuationOwnerId = ctx.currentExecutionId;    
-                    const { isEdpLock, isIdpLock, targetEdpQueue } = this.parseLockKey(ctx.lockKey);
+                /*
+                    Issue PR(#7) : Long delayed jobs stall for interval-driven queues because the future-schedule callback self-invokes only for EDP.
+                    Schedule a continuation for IDP as well in both serverless runtime implementations.
+                */
 
-                    await this.triggerSelfInvocation({
-                        continuationOwnerId,
-                        isEdpLock,
-                        isIdpLock,
-                        pooler,
-                        queue,
-                        delaySec : inTheFutureSeconds,
-                        targetEdpQueue : targetEdpQueue
-                    })
+                // FIX : Removed `if condition` to preavent explicit pooler execution such as Event Driven Pooler.
 
-                    PulsarEventBus.emit("tick:cycle-completed", { queue, cycles: 1 });
-                }
+                const continuationOwnerId = ctx.currentExecutionId;
+                const { isEdpLock, isIdpLock, targetEdpQueue } = this.parseLockKey(ctx.lockKey);
+
+                await this.triggerSelfInvocation({
+                    continuationOwnerId,
+                    isEdpLock,
+                    isIdpLock,
+                    pooler,
+                    queue,
+                    delaySec : inTheFutureSeconds,
+                    targetEdpQueue : targetEdpQueue
+                })
+
+                PulsarEventBus.emit("tick:cycle-completed", { queue, cycles: 1 });
             },
         })
     }

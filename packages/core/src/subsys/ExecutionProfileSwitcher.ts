@@ -20,9 +20,9 @@ export class ExecutionProfileSwitcher {
             if (rawProfile) {
                 const idleProfile : TimingProfile = typeof rawProfile === "object"
                     ? {
-                        activePollMs: rawProfile.activePollMs,
-                        backoffPollMs: rawProfile.backoffPollMs,
-                        idlePollMs: rawProfile.idlePollMs,
+                        activeTickDelayMs: rawProfile.activeTickDelayMs,
+                        saturatedTickDelayMs: rawProfile.saturatedTickDelayMs,
+                        idleTickDelayMs: rawProfile.idleTickDelayMs,
                     } as TimingProfile
                     : TIMING_PROFILES[rawProfile as keyof typeof TIMING_PROFILES];
 

@@ -8,7 +8,6 @@ import { HttpNetworkDriver } from "./drivers/HttpNetworkDriver";
 import { WebSocketNetworkDriver } from "./drivers/WebSocketNetworkDriver";
 import { config } from "../service/ConfigurationStore";
 import { LoggerService, type ILogger } from "../subsys/LoggerService";
-import type { PulsarEventBus } from "../service/PulsarEventBus";
 
 export class UnifiedTransportManager {
 
@@ -75,7 +74,8 @@ export class UnifiedTransportManager {
 
         const interfaceMap : Record<string, string> = {
             http: "HTTP",
-            socket: "WEBSOCKET"
+            socket: "WEBSOCKET",
+            callback : "CALLBACK"
         }
 
         const consumerType = targetQueue.consumer.type;
@@ -83,6 +83,26 @@ export class UnifiedTransportManager {
 
         if (!targetInterface) {
             throw new Error(`[DispatchToNetwork] : Unsupported consumer type "${consumerType}" for queue: "${queue}"`);
+        }
+        
+        /*
+            Issue PR(#7) : Callback consumers pass validation but always fail during dispatch because this path has no callback transport.
+            Implement callback dispatch or reject callback queues during validation.
+        */
+
+        // Fix : Added Callback Implementation.
+
+        if(targetInterface === "CALLBACK") {
+            if(targetQueue.consumer.type == "callback") {
+                return await targetQueue.consumer.handler({
+                    payload : payload?.batch ?? [],
+                    queue,
+                    attempts : 1,
+                    timestamp : new Date().getTime(),
+                    workerId : payload?.worker_id
+                });
+            }
+            return;
         }
 
         for (const driver of this.drivers) {

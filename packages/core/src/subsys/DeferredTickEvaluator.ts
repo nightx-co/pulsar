@@ -125,6 +125,8 @@ export class DeferredTickEvaluator {
                     this.forceExecuteTickLater(queue, targetTimestamp);
                 }, MAX_TIMEOUT)
             )
+
+            return;
         }
 
         this.timers.set(

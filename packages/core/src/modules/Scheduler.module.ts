@@ -85,13 +85,13 @@ export class Scheduler {
 
         // 1. Ready jobs + open slots -> Ultra-fast profile-based active tick
         if (readyJobs > 0 && availableSlots > 0) {
-            this.setTimer(queue, onNext, profile.activePollMs);
+            this.setTimer(queue, onNext, profile.activeTickDelayMs);
             return;
         }
 
         // 2. Ready jobs but slots full -> Backoff poll to check slot freeing
         if (readyJobs > 0 && availableSlots === 0) {
-            this.setTimer(queue, onNext, profile.backoffPollMs);
+            this.setTimer(queue, onNext, profile.saturatedTickDelayMs);
             return;
         }
 
@@ -99,7 +99,7 @@ export class Scheduler {
         if (delayedJobs > 0 && nextVisibleAt) {
             const deltaMs = Math.max(0, nextVisibleAt - Date.now());
 
-            if (deltaMs <= profile.maxTimerMs) {
+            if (deltaMs <= profile.maxNextTickDelayMs) {
                 if(onUpcomingDelayedNext) {
                     onUpcomingDelayedNext(deltaMs);
                 }
@@ -118,8 +118,8 @@ export class Scheduler {
         }
 
         // 4. Idle fallback (optional trigger fallback)
-        if (profile.idlePollMs) {
-            this.setTimer(queue, onNext, profile.idlePollMs);
+        if (profile.idleTickDelayMs) {
+            this.setTimer(queue, onNext, profile.idleTickDelayMs);
         }
     }
 

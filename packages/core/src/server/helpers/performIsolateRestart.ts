@@ -15,9 +15,18 @@ interface IEnginePerformRestart {
 }
 
 export async function performEngineRestart({ targetQueue, isRestarted, isV8Isolate, isolate, executionOwner, lastExecutionId, lastIsolateId, poolerMode, engine } : IEnginePerformRestart) {
-    const isolateUptime = isolate?.uptime ?? 0;
-    const isolateMaxTime = isolate?.maxTime ?? Infinity;
-    const shouldRecycleIsolate = isV8Isolate && isolateUptime >= isolateMaxTime;
+    const isolateUptimeSec = (isolate?.uptime ?? 0) / 1000;
+    const isolateMaxTime = isolate?.maxTimeSec ?? Infinity;
+    const shouldRecycleIsolate = isV8Isolate && isolateUptimeSec >= isolateMaxTime;
+
+    console?.info(
+        [
+          '[V8_ISOLATE_STATS]',
+          `  isolateUptimeSec: ${isolateUptimeSec}`,
+          `  isolateMaxTime: ${isolateMaxTime}`,
+          `  isolateRemainingTimeSec: ${(isolate?.remainingTime ?? 0) / 1000}`,
+        ].join('\n')
+    )
 
     if (isRestarted && isV8Isolate && isolate) {
         console.log(`[Pulsar] : Engine Restarted By (${executionOwner === "watchdog" ? "watchdog" : "self"})`);

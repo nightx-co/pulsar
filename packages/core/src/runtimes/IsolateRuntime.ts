@@ -111,23 +111,21 @@ export class IsolateRuntime extends PulsarRuntimeCore {
                 const inTheFutureSeconds = Math.floor((futureTriggerTime.getTime() - currentTime.getTime()) / 1000) + safeBufferSeconds;
 
                 this.logger.log(`[Scheduler] : Scheduled tick execution request`, `${(inTheFutureSeconds).toFixed(2)}s`);
+                
+                const continuationOwnerId = ctx.currentExecutionId;    
+                const { isEdpLock, isIdpLock, targetEdpQueue } = this.parseLockKey(ctx.lockKey);
 
-                if(pooler === "event-driven-pooler") {
-                    const continuationOwnerId = ctx.currentExecutionId;    
-                    const { isEdpLock, isIdpLock, targetEdpQueue } = this.parseLockKey(ctx.lockKey);
+                await this.triggerSelfInvocation({
+                    continuationOwnerId,
+                    isEdpLock,
+                    isIdpLock,
+                    pooler,
+                    queue,
+                    delaySec : inTheFutureSeconds,
+                    targetEdpQueue : targetEdpQueue
+                })
 
-                    await this.triggerSelfInvocation({
-                        continuationOwnerId,
-                        isEdpLock,
-                        isIdpLock,
-                        pooler,
-                        queue,
-                        delaySec : inTheFutureSeconds,
-                        targetEdpQueue : targetEdpQueue
-                    })
-
-                    PulsarEventBus.emit("tick:cycle-completed", { queue, cycles: 1 });
-                }
+                PulsarEventBus.emit("tick:cycle-completed", { queue, cycles: 1 });
             },
         })
         

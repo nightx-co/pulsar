@@ -5,21 +5,21 @@ export const Queue1 = createQueue({
     queue: "q_5",
     type : "STANDER",
     concurrency: 1,
-    cycleTickLimit : 10,
+    cycleTickLimit : 15,
     maxJobsPerTick : 100_000,
     n: 10,
     sleep: 10,
-    profile: "REALTIME",  // REALTIME | STANDARD | RELAXED | ULTRA_EFFICIENT | BALANCED |  CUSTOM
-    pooler : "interval-driven-pooler", // interval-driven-pooler(IDP) | event-driven-pooler(EDP)
+    profile: "BALANCED",
+    pooler : "interval-driven-pooler",
     stateTransitionPolicy : {
         enabled : false,
         idleThresholdTicks : 5,
-        idleTimingProfile : { activePollMs : 100, backoffPollMs : 100, maxTimerMs : 400000, idlePollMs : 100 }
+        idleTimingProfile : { activeTickDelayMs : 100, saturatedTickDelayMs : 100, maxNextTickDelayMs : 400000, idleTickDelayMs : 100 }
     },
     interventionPolicy : "inherit",
     consumer : {
-        type : "socket",
-        //url : "http://localhost:3001"
+        type : "http",
+        url : "http://localhost:3001"
     },
 });
 
@@ -31,12 +31,12 @@ export const Queue2 = createQueue({
     maxJobsPerTick : 1000,
     n: 10,
     sleep: 10,
-    profile: "REALTIME",  // REALTIME | STANDARD | RELAXED | ULTRA_EFFICIENT | BALANCED |  CUSTOM
-    pooler : "interval-driven-pooler", // interval-driven-pooler(IDP) | event-driven-pooler(EDP)
+    profile: "STANDARD",
+    pooler : "interval-driven-pooler",
     stateTransitionPolicy : { enabled : false },
     consumer : {
-        type : "socket",
-        //url : "http://localhost:3009"
+        type : "http",
+        url : "http://localhost:3009"
     }
 });
 
@@ -49,13 +49,13 @@ export const Queue3 = createQueue({
     maxJobsPerTick : 1000,
     n: 10,
     sleep: 10,
-    profile: "REALTIME",  // REALTIME | STANDARD | RELAXED | ULTRA_EFFICIENT | BALANCED |  CUSTOM
-    pooler : "event-driven-pooler", // interval-driven-pooler(IDP) | event-driven-pooler(EDP)
+    profile: "STANDARD",  // REALTIME | STANDARD | RELAXED | ULTRA_EFFICIENT | BALANCED |  CUSTOM
+    pooler : "interval-driven-pooler", // interval-driven-pooler(IDP) | event-driven-pooler(EDP)
     stateTransitionPolicy : {
         enabled : false,
     },
     consumer : {
-        type : "socket",
-        //url : "http://localhost:3000"
+        type : "http",
+        url : "http://localhost:3001"
     }
 });

@@ -52,13 +52,13 @@ const apiKey = 'MMvGnFbCs7gpFaO31SOmvz4b82jEp1SVfoKLUAIIivqGXPoVDDeycjDfdwAOIkwx
 //     }
 // )
 
-new Worker('q_5',
-    async (job) => {
-        console.log(job)
-        await job.ack(false);
-    },
-    { removeOnFail : false, removeOnComplete : true, storage : unifiedStorage, concurrency : 1, wsConnectionString : "http://localhost:9500", apiKey, reconnectionDelay : 2000 }
-)
+// new Worker('q_5',
+//     async (job) => {
+//         console.log(job)
+//         await job.ack(false);
+//     },
+//     { removeOnFail : false, removeOnComplete : true, storage : unifiedStorage, concurrency : 1, wsConnectionString : "http://localhost:9500", apiKey, reconnectionDelay : 2000 }
+// )
 
 // new Worker('q_6',
 //     async (job) => {
@@ -77,7 +77,14 @@ new Worker('q_5',
 
 //const dependentWorker = new DependentWorker<{ batman : string }>('q_2', { apiKey, concurrency : 1, connection : { url : 'http://localhost:9500', headers : {} } });
 
+
 /*
+    DURING TEST RUN, WE HAVE NOTICED AUTO REQUEST BEING SENT TO THE ENDPOINT WITH NO CAUSE,
+    TURNS OUT IT WAS OUR IDE (CURSOR). BY CHECKING THE HEADER TO SEE IF IT INCLUDES CURSOR,
+    AND SENDING 200 RIGHT AWAY SOLVES UNNESSECERY REQUEST.
+*/
+
+
 Bun.serve({
     port: 3001,
     fetch: handler,
@@ -88,12 +95,11 @@ Bun.serve({
     fetch: handler2,
 });
 
-
 console.log(`Consumer Sever Listening On Port : 3001`);
 console.log(`Consumer Sever Listening On Port : 3009`);
 
 const httpWorker = new HttpWorker('q_5', { storage : unifiedStorage, concurrency : 1, apiKey });
-const httpWorker2 = new HttpWorker('q_6', { storage : unifiedStorage, concurrency : 1, apiKey });
+const httpWorker2 = new HttpWorker('q_3', { storage : unifiedStorage, concurrency : 1, apiKey });
 
 async function handler(request : Request) : Promise<Response> {
     const userAgent = request.headers.get("user-agent") || "";
@@ -123,6 +129,7 @@ async function handler(request : Request) : Promise<Response> {
     )
 }
 
+
 async function handler2(request : Request) : Promise<Response> {
     const userAgent = request.headers.get("user-agent") || "";
 
@@ -141,4 +148,3 @@ async function handler2(request : Request) : Promise<Response> {
         { status: 200 },
     )
 }
-*/

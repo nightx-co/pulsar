@@ -13,16 +13,17 @@ import { PersistentRuntime } from '../runtimes/PersistentRuntime.ts';
 import { ServerlessRuntime } from '../runtimes/ServerlessRuntime.ts';
 import { IsolateRuntime } from '../runtimes/IsolateRuntime.ts';
 
+import { config } from './ConfigurationStore.ts';
+import { UnifiedTransportManager } from '../network/UnifiedTransportManager.ts';
+import { LoggerService } from '../subsys/LoggerService.ts';
+import { QueueFSM } from '../fsm/domain/QueueFSM.ts';
+
 import type { EngineQueuesConfig } from '../types/queue.types.ts';
 import type { EngineConsumerConfig } from '../types/consumer.types.ts';
 import type { IsolateInstance } from './Isolate.service.ts';
 import type { EngineConfig } from '../types/base.types.ts';
 import type { IIntegration, IntegrationConstructor, IntegrationMap } from '../types/integrations.types.ts';
 import type { PulsarRuntimeCore, RuntimeDependencies } from '../shared/PulsarRuntimeCore.ts';
-
-import { config } from './ConfigurationStore.ts';
-import { UnifiedTransportManager } from '../network/UnifiedTransportManager.ts';
-import { LoggerService } from '../subsys/LoggerService.ts';
 
 /**
  * Core abstract base class for the Pulsar engine ecosystem.
@@ -115,11 +116,32 @@ export abstract class PulsarCore {
             throw new Error('[Pulsar] Failed to resolve a valid runtime strategy.');
         }
 
+        const queues = config.get('queues');
+
+        /*
+            Issue PR(#7) : QueueFSM leaves HTTP-consumer queues in IDLE_WAITING_FOR_WORKER,
+            but only WebSocket registration makes a queue READY;
+            HTTP queues therefore fail canExecuteTick() forever. 
+            Initialize HTTP queues as ready while retaining worker gating for socket queues,
+            or add an equivalent readiness transition for HTTP consumers.
+        */
+
         if(config.raw.runtime == PulsarRuntime.PERSISTENT) {
             this.unifiedTransportManager = new UnifiedTransportManager({
                 ...config.raw.networkInterface,
                 isServer : true
             }, this.storage, this.queueService);
+
+            /* FIX
+                FOR QUEUES ONLY WITH CONSUMER TYPE OF HTTP OR CALLBACK, THE QUEUE FSM SHOULD TRANSITION TO READ.
+                AS NO WORKERS WILL CONNECT LIKE SOCKET WORKERS.
+            */
+            for(const { consumer, queue } of queues) {
+                if(consumer.type == "http" || consumer.type == "callback") {
+                    const machine = QueueFSM.getMachine(queue);
+                    machine.transition('READY');    
+                }
+            }
         }
         else {
             this.unifiedTransportManager = new UnifiedTransportManager({
@@ -127,6 +149,15 @@ export abstract class PulsarCore {
                 isServer : false,
                 port : 0,
             }, this.storage, this.queueService)
+
+            /* FIX
+                IN NON PERSISTENT RUNTIME, ( SERVERLESS, V8_ISOLATE, EDGE ) ALWAYS TRANSITION THE STATE TO READY BY DEFAULT.
+                AS OF CURRENT VERSION OF PULSAR, NON PERSISTENT RUNTIME DO NOT SUPPORT SOCKET CONSUMER TYPE.
+            */
+            for(const { queue } of queues) {
+                const machine = QueueFSM.getMachine(queue);
+                machine.transition('READY');
+            }
         }
 
         this.swarmManager = new SwarmManager(

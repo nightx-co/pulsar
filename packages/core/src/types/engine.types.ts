@@ -91,7 +91,7 @@ type BaseEngineOptions = {
 
 export type SelfInvokingEngine = BaseEngineOptions & {
     selfURL: string;
-    selfInvocationMethod?: "auto_using_pgnet" | { method: "manual", handler: (selfUrl: string) => Promise<void> | void };
+    selfInvocationMethod?: "auto_using_pgnet" | { method: "manual", handler: (selfUrl: string, headers : Record<string, string>) => Promise<void> | void };
     /**
      * Specifies how often (in seconds) the engine should invoke itself.
      * 

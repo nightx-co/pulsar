@@ -54,7 +54,7 @@ export class Pulsar<R extends PulsarRuntimeType = PulsarRuntimeType> extends Pul
             executionContext:  this.executionContext,
             storage : this.storage,
             queueService : this.queueService,
-            shutdown:  this.shutdown
+            shutdown: () => this.shutdown()
         })
 
         this.eventSubscriptionModule.start();

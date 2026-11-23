@@ -1,25 +1,37 @@
 # Contributing to Pulsar
 
-Thanks for your interest in contributing to Pedis!
+Thanks for your interest in contributing to Pulsar.
 
-Pedis is an open-source project aiming to bring Redis-inspired caching and data structures directly into PostgreSQL. Contributions, ideas, bug reports and suggestions are welcome as the project evolves.
+Pulsar is a beta stage pooler engine built around PostgreSQL, PGMQ and a unified storage layer. A lot of mental effort has gone into designing it and we want it to keep growing through thoughtful contributions from people who care about how it works.
 
-Currently the project primarily consists of SQL files implementing core data structures and operations. Contributions to the existing SQL implementation are a great place to start.
+## Follow the existing code
 
-Before contributing please open an issue to discuss significant changes or new features. This helps keep development aligned with the projects direction.
+Contributing to Pulsar means following the intent and code style already in the codebase. We plan to document the code structure in more detail in the near future. Until then, read the existing code before you write new code.
 
-When submitting a contribution please try to:
+Not every part of Pulsar is perfect and we will keep improving the structure over time. In the meantime please use the tools that are already built in rather than reinventing them. In particular use the **event bus** and the **FSMs** introduced in recent changes. They make it easier for the internal system to navigate and track state changes, and they keep new code consistent with the rest of the engine.
 
-* Keep SQL functions and changes consistent with the existing implementation.
-* Include examples or tests when adding or modifying operations.
-* Clearly describe what your changes do and why they are needed.
-* Avoid introducing unnecessary dependencies or complexity.
-* Update the documentation when behavior or supported operations change.
+## Where code goes
 
-You can contribute by implementing new data structures, improving existing operations, fixing bugs, writing tests, improving documentation or discussing ideas for the future engine and SDKs.
+Database scripts live in the scripts directory:
 
-Please note that Pedis is under active development and is not intended for production use at this stage. APIs, internal structure, and implementation details may change as the project develops.
+- Lua scripts go in the `lua` folder.
+- SQL functions and queries go in the `sql` folder.
 
-By contributing you agree that your contributions will be licensed under the project's Apache License 2.0.
+## Keep code clean and concise
 
-Thank you for helping build Pedis!
+Do not overwhelm a file, and do not write everything in one place. Split logic into helper functions and helper classes.
+
+- Aim for **150 lines or fewer** per file.
+- Treat **200 lines** as the maximum we will tolerate. Past that we will ask you to split the file.
+- Exceptions: a file may run longer if it fully finishes its job within that size, or if it is a utility-type class. The configuration store and the Pulsar base class are examples of files that can be a little larger.
+- Core execution modules such as the tick module and other classes that play an important role in running the engine should stay concise and modular. clear, small pieces make the engine easier to understand.
+
+## AI usage
+
+Over 70 to 80 percent of Pulsar was written by hand. The exceptions are the SQL and Lua code, which were written with AI along with a few other parts. All of it has been reviewed multiple times.
+
+We encourage you to write code yourself. If you use AI that is fine as long as you understand what you are submitting, you have reviewed it and you have tested that it works. Do not copy and paste AI output without reviewing and testing it.
+
+We do not want vibe coded or agentic code throughout this repository. Pulsar was built with real mental effort, and we want it to be shaped by innovators and not by sloppy AI generated code.
+
+Thank you for helping build Pulsar.

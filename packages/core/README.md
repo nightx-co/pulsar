@@ -33,7 +33,7 @@ This example configures Pulsar for a persistent runtime with PostgreSQL storage 
 ### 1. Import
 
 ```typescript
-import { Pulsar, PulsarRuntime, createQueue } from "@nightx.co/pulsar";
+import { Pulsar, PulsarRuntime, createQueue, EventTriggerStrategy } from "@nightx.co/pulsar";
 import {
   PostgresDriver,
   PulsarUnifiedStorage,
@@ -137,7 +137,7 @@ const engine = new Pulsar({
     port: 9999,
   },
 
-  eventTriggerStrategy: "polling",
+  eventTriggerStrategy: EventTriggerStrategy['POSTGRES_NOTIFY'],
 });
 
 await engine.start();

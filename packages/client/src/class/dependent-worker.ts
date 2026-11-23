@@ -25,12 +25,26 @@ export class DependentWorker<T = any> extends BaseWorker<DependentWorkerOptions>
 
     public async handle (req : any, processor : Processor<T>) {
         const parsedRequest = await parseAnyPayload(req);
-        
-        const { batch, worker_id } = parsedRequest.body as IBatchCandidate<T>;
+        const { headers, method } = parsedRequest;
 
-        const jobs = batch.map((job) => new Job(job.msg_id, job.headers, job.message));
+        const url = new URL(parsedRequest.url);
 
-        await this.handleProcesses(worker_id, jobs, processor);
+        if(url.pathname.endsWith('/dispatch')) {
+            const apiKey = headers['x-api-key'] as string;
+
+            if (!apiKey) {
+                this.logger.warn('Bad Request: API key is required.');
+                return { status: 400, message: 'Bad Request: API key is required.' };
+            }
+
+            if (apiKey !== this.options.apiKey) return { status: 401, message: 'Unauthorized: Invalid API key provided.' };
+            
+            const { batch, worker_id } = parsedRequest.body as IBatchCandidate<T>;
+
+            const jobs = batch.map((job) => new Job(job.msg_id, job.headers, job.message));
+
+            await this.handleProcesses(worker_id, jobs, processor);
+        }
     }
     
     public async connect() {}
@@ -54,17 +68,24 @@ export class DependentWorker<T = any> extends BaseWorker<DependentWorkerOptions>
     private async sendProxyRequest(action : string, queue : string, msgIds : number | Array<number> | string) {
         const payload = { msg_ids: Array.isArray(msgIds) ? msgIds : [msgIds] }
 
-        await fetch(`${this.options.connection.url}/${action.toLowerCase()}`, {
+        const response = await fetch(`${this.options.connection.url}/${action.toLowerCase()}`, {
             method: "POST",
             headers: {
                 "content-type": "application/x-msgpack",
                 "x-target-queue": queue,
+                "x-api-key": this.options.apiKey,
                 "x-action": action.toLowerCase(),
                 ...(action === "DEREGISTER" ? { 'x-worker-id' : msgIds as any } : {}),
                 ...this.options.connection.headers
             },
             body: msgpack.encode(payload),
         })
+
+        if (!response.ok) {
+            const detail = await response.text().catch(() => "");
+            this.logger.error(`[DependentWorker] ${action} for queue "${queue}" failed with ${response.status} ${response.statusText}${detail ? `: ${detail}` : ""}`);
+            throw new Error(`[DependentWorker] ${action} for queue "${queue}" failed with ${response.status} ${response.statusText}${detail ? `: ${detail}` : ""}`);
+        }
     }
 
     async pause() {

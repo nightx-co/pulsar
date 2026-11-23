@@ -28,7 +28,18 @@ export class TickEventRepository {
             const queueConfig = config.raw.queues.find(q => q.queue === queue);
             if (!queueConfig) return;
 
-            if (queueConfig.pooler === "event-driven-pooler") return;
+            if (queueConfig.pooler === "event-driven-pooler") {
+                /*
+                    Issue PR(#7) : Persistent EDP locks are acquired but never released after the triggered tick completes,
+                    blocking subsequent events for up to 120 seconds.
+                    Release the lock after the persistent EDP cycle using the same owner that acquired it.
+                */
+
+                // Fixed : Releasing Queue Lock & Clearing dispatch pending everytime an EDP queue finishes its lifecycle.
+                await this.ctx.storage.repository.releaseQueueLock(`lock:edp:${queueConfig.queue}`, this.ctx.executionContext.currentExecutionId);
+                await this.ctx.storage.repository.clearDispatchPending(`lock:edp:${queueConfig.queue}`);
+                return;
+            }
 
             await executionContext.runTick(queueConfig);
         }

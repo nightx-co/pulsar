@@ -10,6 +10,7 @@ export type ResponseHeaders = {
     targetQueue?: string;
     fencingToken?: string;
     workerId? : string;
+    apiKey? : string;
 }
 
 export const extractHeaders = (rawHeaders : Record<string, string>) : ResponseHeaders => {
@@ -23,5 +24,6 @@ export const extractHeaders = (rawHeaders : Record<string, string>) : ResponseHe
         targetQueue: rawHeaders["x-target-queue"] ?? undefined,
         fencingToken: rawHeaders["x-fencing-token"] ?? undefined,
         workerId: rawHeaders["x-worker-id"] ?? undefined,
+        apiKey: rawHeaders["x-api-key"] ?? undefined,
     }
 }

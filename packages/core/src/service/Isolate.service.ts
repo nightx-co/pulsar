@@ -30,8 +30,8 @@ export class IsolateInstance {
         return typeof startTime === "number" ? Date.now() - startTime : 0;
     }
 
-    get maxTime() : number {
-        return this.get<number>("isolate_max_life_span_sec") ?? this.MAX_ISOLATE_LIFESPAN_SEC * 1000;
+    get maxTimeSec() : number {
+        return (this.get<number>("isolate_max_life_span_sec") ?? this.MAX_ISOLATE_LIFESPAN_SEC * 1000) / 1000;
     }
 
     set<T = unknown>(key: string, value: T) : void {

@@ -17,7 +17,7 @@ export function configValidator(config : EngineConfig, logger : ILogger) {
 
     switch (config.runtime) {
         case PulsarRuntime.V8_ISOLATE:
-            validateTimeout(config.isolate.maxTime);
+            validateTimeout(config.isolate.maxTimeSec);
             break;
     
         case PulsarRuntime.SERVERLESS_VM:

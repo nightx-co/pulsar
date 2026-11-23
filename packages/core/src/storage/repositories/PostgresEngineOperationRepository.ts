@@ -104,7 +104,7 @@ export class PostgresEngineOperationRepository implements IPulsarPostgresEngineO
     }
 
     async checkFencingTokenValidity(queue : string, token : string | number) {
-        const numericToken = typeof token === 'string' ? parseInt(token, 10) : token;
+        const numericToken = typeof token === 'string' && /^\d+$/.test(token) ? Number(token) : NaN;
 
         if (isNaN(numericToken)) return false;
 
@@ -126,7 +126,7 @@ export class PostgresEngineOperationRepository implements IPulsarPostgresEngineO
         const configJsonb = this.sql.json(configurations as any);
 
         return await this.sql.begin(async (sql) => {
-            const result = await this.sql<any[]>`
+            const result = await sql<any[]>`
                 WITH existing AS (
                     SELECT configurations, hash FROM pulsar.meta WHERE instance_id = ${instanceId}
                 ),
@@ -234,15 +234,19 @@ export class PostgresEngineOperationRepository implements IPulsarPostgresEngineO
 
     async getPollingQueueEntries(queueName : string, limit : number = 10) : Promise<Array<IPoolQueueEntry>> {
         const result = await this.sql`
-            SELECT *
-            FROM pulsar.pool_queue_entries
-            WHERE queue = ${queueName}
-            ORDER BY created_at ASC
-            LIMIT ${limit}
-            FOR UPDATE SKIP LOCKED;
+            DELETE FROM pulsar.pool_queue_entries
+            WHERE id IN (
+                SELECT id
+                FROM pulsar.pool_queue_entries
+                WHERE queue = ${queueName}
+                ORDER BY created_at ASC
+                LIMIT ${limit}
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING *;
         `;
-        
-        return result.map((row : any) => row as IPoolQueueEntry);
+
+        return (result as any[]).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) as IPoolQueueEntry[];
     }
 
     async deletePollingQueueEntry(id : number) : Promise<void> {

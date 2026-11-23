@@ -10,7 +10,7 @@ import { PulsarLoggerIntegrations, PulsarEventsIntegrations } from "../integrati
 
 import { Queue1, Queue2, Queue3 } from "./Queues";
 import { Nebula } from "../cluster/Nebula";
-import { createPulsarRequestHandler,  } from "../server";
+import { createPulsarRequestHandler  } from "../server";
 import { EventTriggerStrategy } from "../types/eventTriggerStrategry.types";
 
 const cacheStorage = new RedisDriver({
@@ -24,7 +24,7 @@ const cacheStorage = new RedisDriver({
 const postgresDriver = new PostgresDriver({
     connectionString: "postgresql://postgres:password@localhost:5432/postgres",
     //connectionString: "postgres://supabase_admin:app_password@localhost:32775/order_processing_demo_database",
-    connectionProtocol : 'transactional'
+    connectionProtocol : 'tcp'
 })
 
 const unifiedStorage = new PulsarUnifiedStorage({
@@ -36,17 +36,19 @@ const unifiedStorage = new PulsarUnifiedStorage({
 const INSTANCE_ID = 'eu-central-1';
 const apiKey = 'MMvGnFbCs7gpFaO31SOmvz4b82jEp1SVfoKLUAIIivqGXPoVDDeycjDfdwAOIkwx';
 
-const isolate = new IsolateInstance(500);
+const isolate = new IsolateInstance(10);
 
 const getEngine = (instanceId : string) : Pulsar => {
+    console.log(`calling enigne`)
     return new Pulsar({
-        runtime : PulsarRuntime.PERSISTENT,
+        runtime : PulsarRuntime.SERVERLESS_VM,
         instanceId : instanceId,
         apiKey : apiKey,
         storage : unifiedStorage,
-        //timeoutSec : 10,
+        //isolate,
+        timeoutSec : 150,
         queues : [
-            Queue1,
+            Queue3,
             //Queue2,
             //Queue3
         ],
@@ -58,15 +60,15 @@ const getEngine = (instanceId : string) : Pulsar => {
 
         engine : {
             //selfURL : 'http://host.docker.internal:3000',
-            //selfURL : 'http://host.docker.internal:7000',
-            //selfInvocationMethod : "auto_using_pgnet",
+            selfURL : 'http://host.docker.internal:7000',
+            selfInvocationMethod : "auto_using_pgnet",
             // handler(selfUrl) {
             //     console.log(`[Pulsar] Process : SELF INVOKE FUNCTION EXECUTED.`)
             // },
-            //selfRestartIntervalSec : 10,
-            //selfInvocationIntervalSec : 5,
+            selfRestartIntervalSec : 10,
+            selfInvocationIntervalSec : 5,
             
-            poolingIntervalMS : 500,
+            //poolingIntervalMS : 500,
             
             healthCheckIntervalSec : 15,
             cycleTickLimit : 1000,
@@ -75,12 +77,12 @@ const getEngine = (instanceId : string) : Pulsar => {
             interventionPolicy : "cycle"
         },
 
-        eventTriggerStrategy : EventTriggerStrategy['POSTGRES_NOTIFY'],
+        //eventTriggerStrategy : EventTriggerStrategy['POSTGRES_NOTIFY'],
 
-        networkInterface : {
-            mode : "hybrid",
-            port : 9500,
-        },
+        // networkInterface : {
+        //     mode : "hybrid",
+        //     port : 9500,
+        // },
 
         integrations : [
             //PulsarLoggerIntegrations,
@@ -93,9 +95,9 @@ const getEngine = (instanceId : string) : Pulsar => {
     })
 }
 
-const engine = getEngine('eu-central-1');
+//const engine = getEngine('eu-central-1');
 
-engine.start();
+//engine.start();
 
 // process.on('SIGINT', async () => {
 //     try {
@@ -117,7 +119,7 @@ engine.start();
 
 // console.log(`after code`)
 
-/*
+
 const requestHandler = createPulsarRequestHandler({
     getEngine,
     unifiedStorage,
@@ -143,7 +145,6 @@ const server = Bun.serve({
 });
 
 console.log(`Listening on ${server.url}`);
-*/
 
 /*
 Nebula.connect('us-west-1', "HTTPS", 'http://localhost:3000');

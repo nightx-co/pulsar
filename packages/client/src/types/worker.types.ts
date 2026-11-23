@@ -18,8 +18,19 @@ export type QueueMessage<T = unknown> = {
 
 export type BaseOptions = {
     concurrency? : number;
+
+    /**
+     * Controls whether completed jobs are removed from the queue.
+     * @remarks Planned for a future release. currently not implemented by the worker.
+    */
     removeOnComplete? : boolean | number;
+
+    /**
+     * Controls whether failed jobs are removed from the queue.
+     * @remarks Planned for a future release. currently not implemented by the worker.
+    */
     removeOnFail? : boolean | number;
+    
     apiKey : string;
     logger? : ILogger;
 }

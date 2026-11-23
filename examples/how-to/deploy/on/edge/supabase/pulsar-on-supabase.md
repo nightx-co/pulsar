@@ -303,6 +303,9 @@ Deno.serve(async (req: Request) => {
 
     const handlerPromise = requestHandler.handle(req);
     EdgeRuntime.waitUntil(handlerPromise);
+    
+    // OR
+    const { message, status } = await handlerPromise;
 
     return new Response(JSON.stringify({ message }), {
         headers: {

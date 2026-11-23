@@ -8,6 +8,11 @@
     "types": "./dist/index.d.ts",
     "private": false,
     "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
         "./class": {
             "types": "./dist/class/index.d.ts",
             "import": "./dist/class/index.js",

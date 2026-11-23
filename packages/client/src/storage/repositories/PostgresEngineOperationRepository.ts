@@ -4,7 +4,7 @@ import { LoggerService, type ILogger } from "../../utils/LoggerService.ts";
 
 export interface IPulsarPostgresEngineOperationRepository {
     ack(queue : string, jobIds : number | Array<number>) : Promise<boolean>;
-    nack (queue : string, jobIds : number | Array<number>) : Promise<void>;
+    nack (queue : string, jobIds : number | Array<number>) : Promise<boolean>;
     retry (queue : string, jobIds : number | Array<number>) : Promise<boolean>;
 }
 
@@ -56,7 +56,17 @@ export class PostgresEngineOperationRepository implements IPulsarPostgresEngineO
     }
 
     public async nack(queue : string, jobId : number | Array<number>) {
-        
+        const ids = Array.isArray(jobId) ? jobId : [jobId];
+        if (ids.length === 0) return false;
+
+        const result = await this.sql`
+            SELECT pgmq.archive(
+                ${queue}::text,
+                ${ids.map((id) => id.toString())}::bigint[]
+            ) AS archived
+        `;
+
+        return result.length > 0;
     }
 
     public async retry(queue : string, jobIds : number | number[]) {

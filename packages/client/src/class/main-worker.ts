@@ -7,6 +7,8 @@ import { PulsarUnifiedStorage } from "../storage/PulsarStorage";
 import type { IBatchCandidate, IWorkerTransport, Processor, WorkerOptions } from "../types/worker.types";
 import { createSocket } from '../helpers/createSocket';
 
+const WS_CLOSED = 3;
+
 export class Worker<T = any> extends BaseWorker<WorkerOptions> {
     
     protected override transport : IWorkerTransport = this;
@@ -46,9 +48,9 @@ export class Worker<T = any> extends BaseWorker<WorkerOptions> {
         const socket = this.socket;
         if (!socket) return;
 
-        const serializedPayload = JSON.stringify({ type : "REGISTER", queue : this.queueName });
+        const serializedPayload = JSON.stringify({ type : "REGISTER", data : {queue : this.queueName, api_key : this.options.apiKey} });
 
-        socket.onopen = async () => {
+        socket.onopen = () => {
             this.isConnected = true;
             this.reconnectAttempts = 0;
             if (this.reconnectTimer) {
@@ -62,18 +64,18 @@ export class Worker<T = any> extends BaseWorker<WorkerOptions> {
             await this.onMessage(event);
         }
 
-        socket.onclose = async () => {
+        socket.onclose = () => {
             if (this.socket !== socket) return;
             this.isConnected = false;
             this.scheduleReconnect();
         }
 
-        socket.onerror = async () => {
+        socket.onerror = () => {
             if (this.socket !== socket) return;
             
             if (this.socket !== socket) return;
             
-            if (socket.readyState === WebSocket.CLOSED) {
+            if (socket.readyState === WS_CLOSED) {
                 this.isConnected = false;
                 this.scheduleReconnect();
             }
@@ -107,7 +109,7 @@ export class Worker<T = any> extends BaseWorker<WorkerOptions> {
     private async onMessage(event : MessageEvent) {
         try {
             const rawData = event.data;
-            const decodedPayload = decode(rawData as any) as { type : "STORAGE_BIND" | "DISPATCH_BATCH", data : any };
+            const decodedPayload = decode(rawData as any) as { type : "STORAGE_BIND" | "DISPATCH_BATCH" | "SOMETHING_WRONG", data : any };
         
             if (decodedPayload) {
                 const eventType = decodedPayload.type;
@@ -125,6 +127,14 @@ export class Worker<T = any> extends BaseWorker<WorkerOptions> {
                         const jobs = batch.map((job) => new Job<T>(job.msg_id, job.headers, job.message));
                         await this.handleProcesses(worker_id, jobs, this.processor);
                     }
+                }
+
+                if(eventType === "SOMETHING_WRONG") {
+                    const { data, err, message, status } = decodedPayload.data as { message : string, data : any, err : any, status : number };
+                    
+                    if(status == 200) this.logger.warn(`${message}`, err);
+                    if(status <= 400) this.logger.warn(`${message}`, err);
+                    if(status >= 400) this.logger.error(`${message}`, err);
                 }
             }
         }

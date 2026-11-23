@@ -29,6 +29,26 @@ Pulsar has not undergone enough stress testing, failure simulation, or long-runn
 
 Treat reliability as unproven until we publish reproducible stress-test results and collect more production feedback.
 
+**Configuration**
+
+Configuration is a mission critical part of running Pulsar. If it is not set up correctly the engine will not work. This covers three areas:
+
+- Storage configuration.
+- Runtime configuration.
+- Engine configuration.
+
+We have tried to explain each of these in our documentation and on GitHub. If something is still unclear or hard to follow, or missing please open a [GitHub issue](https://github.com/nightx-co/pulsar/issues) and tell us. We want to hear your feedback and we will use it to make configuration easier to understand and easier to get right.
+
+**Reducing configuration**
+
+We have put a lot of effort into designing the engine's interfaces to minimize the amount of configuration you have to write. The network interface is a good example. In the early phase, supporting WebSocket and HTTP consumers meant you had to:
+
+- Define a WebSocket driver and an HTTP driver, the same way you define the storage layer.  
+Pass those drivers in.
+- Also define the network interface inside the engine configuration.
+
+The network interface now ships with its own drivers so most of that setup is gone. We have condensed the engine configuration as far as we reasonably can and what remains are the outbound configuration options you still need to manage today.
+
 ## Recommended use
 
 Pulsar is a good fit for:

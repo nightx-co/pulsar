@@ -1,9 +1,8 @@
 import msgpack from '@msgpack/msgpack';
+import { HttpFetchHandler } from '../helpers/httpFetchHandler';
 import { RuntimeEventBridge } from '../../subsys/RuntimeEventBridge';
 import { BaseNetworkDriver } from "../abstract/BaseNetworkDriver";
 import { createRuntimeCacheStorage } from "../../subsys/RuntimeCacheStorage";
-import { parseRequest } from "../../server/parser/parseRequest";
-import { extractHeaders, type ResponseHeaders } from '../../server/utility/extract-headers';
 import { config } from "../../service/ConfigurationStore";
 
 import { PulsarRuntime } from "../../types/runtime.types";
@@ -13,17 +12,6 @@ import type { NetworkInterface } from "../NetworkInterface";
 import type { QueueService } from "../../modules/Queue.module";
 import type { EngineConsumerConfig } from "../../types/consumer.types";
 import type { RuntimeCacheStorage } from "../../subsys/RuntimeCacheStorage";
-import type { IRuntimeExecutionContext } from '../../runtimes/runtimeTypes';
-
-type StandardArgs = {
-    headers : ResponseHeaders;
-    body : any;
-}
-
-type StandardResponse = {
-    status : number;
-    message : string;
-}
 
 export class HttpNetworkDriver extends BaseNetworkDriver {
     public override readonly interface = "HTTP";
@@ -33,7 +21,7 @@ export class HttpNetworkDriver extends BaseNetworkDriver {
 
     private runtimeEventBridge : RuntimeEventBridge;
     private store : RuntimeCacheStorage;
-
+    private httpFetchHandler : HttpFetchHandler;
 
     constructor(
         readonly networkConfig : NetworkConfig,
@@ -47,6 +35,13 @@ export class HttpNetworkDriver extends BaseNetworkDriver {
         const runtimeExecutionId = this.memory.kv.get<string>("runtime_execution_id");
 
         this.runtimeEventBridge = new RuntimeEventBridge(this.storage, this.logger, runtimeExecutionId!);
+        this.httpFetchHandler = new HttpFetchHandler(
+            this.runtimeEventBridge,
+            this.store,
+            this.logger,
+            this.queueService,
+            this.storage
+        );
 
         const consumers = config.get('queues');
         const map : Map<string, EngineConsumerConfig> = new Map();
@@ -105,140 +100,6 @@ export class HttpNetworkDriver extends BaseNetworkDriver {
     public override async stop() {}
 
     private async handleFetch(req : Request) {
-        const { url: rawUrl, method, body, headers : rawHeaders } = await parseRequest(req);
-        const headers = extractHeaders(rawHeaders);
-
-        const url = new URL(rawUrl);
-        const args = { headers, body };
-
-        if (url.pathname.endsWith("/ack") && method === "POST") {
-            const response = await this.handleAck(args);
-            return new Response(response.message, { status: response.status });
-        }
-
-        if (url.pathname.endsWith("/nack") && method === "POST") {
-            const response = await this.handleNack(args);
-            return new Response(response.message, { status: response.status });
-        }
-
-        if (url.pathname.endsWith("/retry") && method === "POST") {
-            const response = await this.handleRetry(args);
-            return new Response(response.message, { status: response.status });
-        }
-
-        if (url.pathname.endsWith("/deregister") && method === "POST") {
-            const response = await this.handleDeregister(args);
-            return new Response(response.message, { status: response.status });
-        }
-
-        const executionOwner = headers.executionOwner;
-        const poolerMode = headers.poolerMode;
-
-        if(executionOwner == 'trigger') {
-            if(poolerMode == 'event-driven-pooler') {
-                const queueName = headers.targetQueue as string;
-                const fencingToken = headers.fencingToken ?? '0';
-
-                const activeCtx = this.store.kv.get<IRuntimeExecutionContext>('active_runtime_ctx');
-
-                if(!activeCtx) {
-                    this.logger.warn('active runtime context was not found');
-                    return new Response('UNKNOWN ROUTE', { status: 200 });
-                }
-
-                else await this.runtimeEventBridge.httpEventDrivenQueueTrigger(queueName, fencingToken, activeCtx);
-            }
-        }
-
-        return new Response('UNKNOWN ROUTE', { status: 200 });
-    }
-
-    private async performBatchAction(queue : string, workerId : string, messageIds : number[],  action : "ACK" | "NACK" | "RETRY" | "DEREGISTER") {
-        try {
-            switch (action) {
-                case "ACK":
-                    await this.queueService.ackBatch(queue, messageIds);
-                    break;
-                case "NACK":
-                    await this.queueService.ackBatch(queue, messageIds);
-                    break;
-                case "RETRY":
-                    await this.queueService.retryBatch(queue, messageIds);
-                    break;
-                case "DEREGISTER":
-                    await this.storage.repository.deregisterWorker(workerId, queue);
-                    break;
-            }
-        }
-        catch (error) {
-            this.logger.error(`Error performing batch action [${action}] for queue [${queue}]:`, error);
-            throw error;
-        }
-    }
-
-    private parseBody(body : ArrayBufferLike | Uint8Array) : any {
-        try {
-            if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-                return msgpack.decode(body);
-            }
-
-            return body;
-        }
-        catch (err : any) {
-            throw new Error(`Failed to parse request body : ${err?.message}`);
-        }
-    }
-
-    private extractContext(args : StandardArgs) {
-        const headers = args.headers;
-        const body = this.parseBody(args.body);
-        const queue = headers.targetQueue;
-        const workerId = headers.workerId ?? '';
-
-        if (!queue) {
-            throw new Error("[HttpNetworkDriver] Queue not found in headers");
-        }
-
-        return { headers, body, queue, workerId };
-    }
-
-    private async getMessageIds(args : StandardArgs) : Promise<{ queue : string; messageIds : number[]; workerId : string }> {
-        const { queue, body, workerId } = this.extractContext(args);
-
-        const rawMsgIds = (Array.isArray(body?.msg_ids) ? body.msg_ids : []) as number[];
-        const messageIds : number[] = rawMsgIds
-            .map((id) => Number.parseInt(String(id), 10))
-            .filter((id) => Number.isInteger(id) && id >= 0);
-
-        return { queue, messageIds, workerId };
-    }
-
-    private async handleAck(args : StandardArgs) : Promise<StandardResponse> {
-        const { messageIds, queue, workerId } = await this.getMessageIds(args);
-        await this.performBatchAction(queue, workerId, messageIds, "ACK");
-        return { message: "Jobs Acknowledged", status: 200 };
-    }
-
-    private async handleNack(args : StandardArgs) : Promise<StandardResponse> {
-        const { messageIds, queue, workerId } = await this.getMessageIds(args);
-        await this.performBatchAction(queue, workerId, messageIds, "NACK");
-        return { message: "Jobs Not Acknowledged", status: 200 };
-    }
-
-    private async handleRetry(args : StandardArgs) : Promise<StandardResponse> {
-        const { queue, workerId, messageIds } = await this.getMessageIds(args);
-        await this.performBatchAction(queue, workerId, messageIds, "RETRY");
-        return { message: "Jobs Retry Applied", status: 200 };
-    }
-
-    private async handleDeregister(args : StandardArgs) : Promise<StandardResponse> {
-        const { queue, workerId } = this.extractContext(args);
-
-        if (!workerId) {
-            throw new Error("[HttpNetworkDriver] Worker ID not found in headers");
-        }
-
-        await this.performBatchAction(queue, workerId, [], "DEREGISTER");
-        return { message: "Worker Deregistered", status: 200 };
+        return this.httpFetchHandler.handleFetch(req);
     }
 }

@@ -156,7 +156,7 @@ export class RedisQueueRepository extends BaseQueueRepository {
     }
 
     override async clearDispatchPending(lockKey : string) : Promise<void> {
-        const dispatchKey = `${lockKey}:pending`;
+        const dispatchKey = `${this.prefix}:${lockKey}:pending`;
         await this.redis.del(dispatchKey);
     }
 

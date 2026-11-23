@@ -48,9 +48,7 @@ export class QueueService {
      * @param strategy 'rr' (Round Robin), 'grouped' (SQS-style), or 'head' (One per group)
      */
     public async readFifo(queue: string, vt: number, qty: number, strategy: 'rr' | 'grouped' | 'head' = 'grouped'): Promise<any[]> {
-        let functionName = 'pgmq.read_grouped';
-        if (strategy === 'rr') functionName = 'pgmq.read_grouped_rr';
-        if (strategy === 'head') functionName = 'pgmq.read_grouped_head';        
+        // FUTURE IMPLEMENTATION        
         return []
     }
 
@@ -106,6 +104,22 @@ export class QueueService {
                 0
             ) AS set_vt
             FROM unnest(${ids}::bigint[]) AS id
+        `;
+
+        return result.filter((row) => Boolean(row.set_vt)).length;
+    }
+
+    public async nackBatch(queue: string, messageIds: number[]): Promise<number> {
+        if (messageIds.length === 0) return 0;
+
+        const ids = messageIds.map((id) => id.toString());
+
+        const result = await this.sql`
+            SELECT pgmq.archive(
+                ${queue}::text,
+                ${ids.map((id) => id.toString())}::bigint[],
+                0
+            ) AS archived
         `;
 
         return result.filter((row) => Boolean(row.set_vt)).length;

@@ -38,7 +38,7 @@ export class PostgresQueueRepository extends BaseQueueRepository {
 
         const result = await this.sql<{ granted_worker_id: string }[]>`
             SELECT granted_worker_id
-            FROM register_workers(
+            FROM pulsar.register_workers(
                 ${registryKey}::varchar,
                 ${globalRegistryKey}::varchar,
                 ${concurrency}::int,
