@@ -14,6 +14,7 @@ interface PulsarHandlerOptions {
     unifiedStorage : PulsarUnifiedStorage;
     getEngine: (instanceId : string) => Pulsar;
     instanceId : string;
+    apiKey : string;
     /**
      * Optional isolate instance. Required only when Pulsar runtime is V8_ISOLATE.
      */
@@ -42,7 +43,7 @@ class PulsarRequestHandlerBuilder {
             logger : console,
             storage : opts.unifiedStorage,
             ensureReady: () => opts.unifiedStorage.connect(),
-            getApiKey: () => config.get('apiKey')
+            getApiKey: () => opts.apiKey
         })
     }
 

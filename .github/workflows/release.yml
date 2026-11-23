@@ -4,16 +4,31 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      core:
+        description: 'Release @core'
+        type: boolean
+        default: true
+      client:
+        description: 'Release @client'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
+
+# Queue overlapping runs so two merges never bump and push at the same time
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      core: ${{ steps.filter.outputs.core }}
-      client: ${{ steps.filter.outputs.client }}
+      core: ${{ steps.decide.outputs.core }}
+      client: ${{ steps.decide.outputs.client }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -21,16 +36,46 @@ jobs:
           fetch-depth: 2
 
       - name: Detect Package Changes
+        if: github.event_name == 'push'
         uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
             core:
               - 'packages/core/**'
-              - '!packages/core/package.json'
             client:
               - 'packages/client/**'
-              - '!packages/client/package.json'
+
+      - name: Decide What To Release
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          AUTO_RELEASE: ${{ vars.AUTO_RELEASE }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          FILTER_CORE: ${{ steps.filter.outputs.core }}
+          FILTER_CLIENT: ${{ steps.filter.outputs.client }}
+          INPUT_CORE: ${{ inputs.core }}
+          INPUT_CLIENT: ${{ inputs.client }}
+        run: |
+          core=false
+          client=false
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            # Manual runs ignore the kill switch; the person chose explicitly
+            core="$INPUT_CORE"
+            client="$INPUT_CLIENT"
+          elif [ "$AUTO_RELEASE" = "false" ]; then
+            echo "Automatic releases are disabled (AUTO_RELEASE=false)."
+          elif [[ "$COMMIT_MSG" == *"[skip release]"* ]]; then
+            echo "Commit message contains [skip release]."
+          else
+            core="${FILTER_CORE:-false}"
+            client="${FILTER_CLIENT:-false}"
+          fi
+
+          echo "core=$core" >> "$GITHUB_OUTPUT"
+          echo "client=$client" >> "$GITHUB_OUTPUT"
+          echo "Release core: $core | Release client: $client"
 
   release-core:
     needs: changes
@@ -40,6 +85,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}   # branch tip, not the triggering SHA
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
@@ -61,11 +107,11 @@ jobs:
       - name: Install Dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build Core
-        run: bun run build:core
-
       - name: Bump Core Patch Version
         run: bun run patch:core
+
+      - name: Build Core
+        run: bun run build:core
 
       - name: Publish Core to npm
         run: bun run release:core
@@ -73,16 +119,23 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Push Version Commit and Tag
-        run: git push --follow-tags
+        run: |
+          git pull --rebase origin ${{ github.ref_name }}
+          git push --follow-tags
 
   release-client:
-    needs: changes
-    if: needs.changes.outputs.client == 'true'
+    needs: [changes, release-core]
+    # Run when client changed, and core either succeeded or was skipped
+    if: >-
+      ${{ !cancelled()
+      && needs.changes.outputs.client == 'true'
+      && (needs.release-core.result == 'success' || needs.release-core.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}   # picks up core's version commit
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
@@ -104,11 +157,11 @@ jobs:
       - name: Install Dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build Client
-        run: bun run build:client
-
       - name: Bump Client Patch Version
         run: bun run patch:client
+
+      - name: Build Client
+        run: bun run build:client
 
       - name: Publish Client to npm
         run: bun run release:client
@@ -116,4 +169,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Push Version Commit and Tag
-        run: git push --follow-tags
+        run: |
+          git pull --rebase origin ${{ github.ref_name }}
+          git push --follow-tags

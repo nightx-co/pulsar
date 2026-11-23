@@ -76,7 +76,7 @@ export class DependentWorker<T = any> extends BaseWorker<DependentWorkerOptions>
         const response = await fetch(`${this.options.connection.url}/${action.toLowerCase()}`, {
             method: "POST",
             headers: {
-                "content-type": "application/x-msgpack",
+                "content-type": "applicationjson",
                 "x-target-queue": queue,
                 "x-api-key": this.options.apiKey,
                 "x-action": action.toLowerCase(),

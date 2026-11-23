@@ -67,6 +67,6 @@ export class HttpFetchHandler {
             }
         }
 
-        return new Response('UNKNOWN ROUTE', { status: 404 });
+        return new Response('UNKNOWN ROUTE', { status: 200 });
     }
 }
