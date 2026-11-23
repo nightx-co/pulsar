@@ -55,7 +55,7 @@ The queue name must match the target queue configured in the Pulsar instance.
 If the queue name does not match the queue specified in the Pulsar instance's consumer configuration, the worker may fail to acknowledge the job and deregister the targeted worker. This can lead to repeated restarts or potentially a complete halt of the engine.
 
 ```typescript
-const queue = "q_5";
+const queue = "order_queue";
 ```
 
 The API key must be identical in both the Pulsar instance and the client.
@@ -99,19 +99,15 @@ import { waitUntil } from "cloudflare:workers";
 
 export default {
   async fetch(request, env, ctx) {
-    //ctx.waitUntil
-
-    waitUntil(async () => {
-        await httpWorker.handle(req, async (job) => {
-          await job.ack(true);
-        });
-    })
+    waitUntil(
+      httpWorker.handle(request, async (job) => {
+        await job.ack(true);
+      })
+    );
 
     return new Response("Success");
   },
 };
-
-
 ```
 
 ## References

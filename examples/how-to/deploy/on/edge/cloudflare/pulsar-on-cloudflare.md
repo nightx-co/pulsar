@@ -19,6 +19,7 @@ import {
   IsolateInstance,
   Pulsar,
   PulsarRuntime,
+  createQueue,
 } from "@nightx.co/pulsar@latest";
 
 // Storage classes

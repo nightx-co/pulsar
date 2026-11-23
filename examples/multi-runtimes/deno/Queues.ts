@@ -1,4 +1,4 @@
-import { createQueue } from "pulsar";
+import { createQueue } from "@nightx.co/pulsar";
 
 export const Queue1 = createQueue({
     queue: "q_1",

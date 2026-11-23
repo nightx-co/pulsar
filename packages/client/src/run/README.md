@@ -1,0 +1,1 @@
+Use the run directory exclusively for local testing and execution. Direct local imports are standard here, avoiding the overhead of building and installing the SDK prior to each run.

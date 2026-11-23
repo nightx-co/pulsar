@@ -1,0 +1,17 @@
+---
+title: Making Pulsar More Reliable Across Redis Versions
+description: Making Pulsar more reliable by improving Redis compatibility across different versions without requiring newer Redis features.
+author: Hamim
+date: 2026-11-18
+tags: [Pulsar, Redis, Cache, Storage]
+---
+
+A few months ago when we initially started working on Pulsar we were using the latest Redis operators. These supported features like Redis hash expiration and other operations.
+
+However things changed when we started testing the SDK. During one of our tests we discovered that Redis 7.2 does not support hash expiration in the way our implementation expected. This was an important finding because most major cloud providers use Redis 7.2 as their LTS or stable version.
+
+Our SDK on the other hand required Redis 7.4 or newer for those operations to work properly. This meant that users running Redis 7.2 through their cloud providers could face compatibility issues even though they were using a stable and widely supported Redis version.
+
+We didn't want to force users to upgrade their Redis instances just to make our SDK work. Instead we decided to revisit our implementation and make changes to our Lua scripts so that the required operations could work across different Redis versions.
+
+The goal was simple. Rather than depending on newer Redis features we wanted to make Pulsar more compatible with the Redis versions that major cloud providers already support. This way users can run Pulsar without worrying about upgrading their Redis infrastructure just to meet our requirements.

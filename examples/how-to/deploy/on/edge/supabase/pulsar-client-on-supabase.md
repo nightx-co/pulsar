@@ -38,7 +38,7 @@ const cacheStorage = new RedisDriver({
 const postgresDriver = new PostgresDriver({
   connectionString:
     "postgresql://postgres:password@host.docker.internal:5432/postgres", // Must use a pooler connection string to avoid exhausting database connections
-  connectionProtocol: "transcational", // Never use TCP on serverless and edge runtimes
+  connectionProtocol: "transaction", // Never use TCP on serverless and edge runtimes
 });
 
 const unifiedStorage = new PulsarUnifiedStorage({

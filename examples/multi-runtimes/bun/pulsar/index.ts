@@ -34,7 +34,6 @@ const engine = new Pulsar({
     },
 
     engine : {
-        poolingMode : "interval-driven-pooler",
         poolingIntervalMS : 500,
         
         healthCheckIntervalSec : 15,
