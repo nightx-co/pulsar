@@ -16,14 +16,11 @@
         "dev:client": "bun --filter @nightx.co/pulsar-client dev",
         "build:client": "bun --filter @nightx.co/pulsar-client build",
         "patch:client": "cd packages/client && npm version patch",
-        "release:client": "cd packages/client && npm publish $(ls -t builds/*.tgz | head -n 1) --access public",
-        "web": "bun --filter site dev",
-        "build:web": "bun --filter site build",
-        "build": "bun --filter '*' build"
+        "release:client": "cd packages/client && npm publish $(ls -t builds/*.tgz | head -n 1) --access public"
     },
     "dependencies": {
-        "@nightx.co/pulsar": "^1.0.17",
-        "@nightx.co/pulsar-client": "^1.0.6",
+        "@nightx.co/pulsar": "^1.0.22",
+        "@nightx.co/pulsar-client": "^1.0.13",
         "dotenv": "^18.0.9",
         "drizzle-kit": "^0.31.11"
     }

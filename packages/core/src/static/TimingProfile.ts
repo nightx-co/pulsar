@@ -82,7 +82,7 @@ export const TIMING_PROFILES : Record<Exclude<TimingProfileType, 'CUSTOM'>, Timi
     ULTRA_EFFICIENT: {
         activeTickDelayMs: 10_000,
         saturatedTickDelayMs: 10_0000,
-        idleTickDelayMs: 30_0000,
+        idleTickDelayMs: 120_000,
         maxNextTickDelayMs: 60_000,
     },
 }

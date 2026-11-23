@@ -8,6 +8,7 @@ import { extractHeaders } from "./utility/extract-headers";
 import type { IsolateInstance } from "../service/Isolate.service";
 import type { Pulsar } from "../service/Pulsar.service";
 import type { PulsarUnifiedStorage } from "../storage/PulsarStorage";
+import { config } from "../service/ConfigurationStore";
 
 interface PulsarHandlerOptions {
     unifiedStorage : PulsarUnifiedStorage;
@@ -40,7 +41,8 @@ class PulsarRequestHandlerBuilder {
         this.queueActionHandler = new QueueActionHandler({
             logger : console,
             storage : opts.unifiedStorage,
-            ensureReady: () => opts.unifiedStorage.connect()
+            ensureReady: () => opts.unifiedStorage.connect(),
+            getApiKey: () => config.get('apiKey')
         })
     }
 

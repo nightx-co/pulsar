@@ -35,12 +35,12 @@ export class UnifiedTransportManager {
         }
 
         if (this.config.mode === "http" || this.config.mode === "hybrid") {
-            this.drivers.push(new HttpNetworkDriver(this.config, this.networkInterface, this.storage, this.queueServuce));
+            this.drivers.push(new HttpNetworkDriver(this.config, this.networkInterface, this.storage));
         }
     }
 
     private initializeClientTopology() {
-        this.drivers.push(new HttpNetworkDriver(this.config, undefined as any, this.storage, this.queueServuce));
+        this.drivers.push(new HttpNetworkDriver(this.config, undefined as any, this.storage));
     }
 
     public async bootAll() {

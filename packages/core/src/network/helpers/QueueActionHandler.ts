@@ -22,7 +22,6 @@ const OK_MESSAGES : Record<Action, string> = {
 }
 
 interface QueueActionDeps {
-    //queueService : QueueService;
     storage : PulsarUnifiedStorage;
     logger : ILogger;
     getApiKey? : () => string | undefined;
@@ -108,6 +107,11 @@ export class QueueActionHandler {
         else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) body = decode(body as any);
 
         const raw = Array.isArray(body?.msg_ids) ? body.msg_ids : [];
-        return raw.map((id : unknown) => Number.parseInt(String(id), 10)).filter((id : number) => Number.isInteger(id) && id >= 0);
+        
+        return raw.map((id : unknown) => {
+            const num = typeof id === "string" && id.trim() !== "" ? Number(id) : typeof id === "number" ? id : Number.NaN;
+            if (!Number.isSafeInteger(num) || num < 0) throw new Error("INVALID_MSG_ID");
+            return num;
+        })
     }
 }

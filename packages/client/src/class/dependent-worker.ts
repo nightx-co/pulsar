@@ -41,6 +41,11 @@ export class DependentWorker<T = any> extends BaseWorker<DependentWorkerOptions>
             
             const { batch, worker_id } = parsedRequest.body as IBatchCandidate<T>;
 
+            if (!worker_id || !Array.isArray(batch) || batch.length === 0) {
+                this.logger.warn('Bad Request : Worker ID and a non-empty batch are required.');
+                return { status : 400, message : 'Bad Request : Worker ID and a non-empty batch are required.' };
+            }
+
             const jobs = batch.map((job) => new Job(job.msg_id, job.headers, job.message));
 
             await this.handleProcesses(worker_id, jobs, processor);
@@ -78,7 +83,7 @@ export class DependentWorker<T = any> extends BaseWorker<DependentWorkerOptions>
                 ...(action === "DEREGISTER" ? { 'x-worker-id' : msgIds as any } : {}),
                 ...this.options.connection.headers
             },
-            body: msgpack.encode(payload),
+            body: JSON.stringify(payload),
         })
 
         if (!response.ok) {

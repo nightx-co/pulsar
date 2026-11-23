@@ -49,7 +49,7 @@ export class QueueService {
      */
     public async readFifo(queue: string, vt: number, qty: number, strategy: 'rr' | 'grouped' | 'head' = 'grouped'): Promise<any[]> {
         // FUTURE IMPLEMENTATION        
-        return []
+        throw new Error(`FIFO NOT IMPLEMENTED`);
     }
 
     public async read<T = unknown>(queue: string, visibilityTimeout = 30, quantity = 1): Promise<QueueMessage<T>[]> {
@@ -111,18 +111,17 @@ export class QueueService {
 
     public async nackBatch(queue: string, messageIds: number[]): Promise<number> {
         if (messageIds.length === 0) return 0;
-
+    
         const ids = messageIds.map((id) => id.toString());
-
+    
         const result = await this.sql`
             SELECT pgmq.archive(
                 ${queue}::text,
-                ${ids.map((id) => id.toString())}::bigint[],
-                0
+                ${ids}::bigint[]
             ) AS archived
         `;
-
-        return result.filter((row) => Boolean(row.set_vt)).length;
+    
+        return result.length;
     }
 
     public async retry( queue: string, messageId: bigint): Promise<boolean> {

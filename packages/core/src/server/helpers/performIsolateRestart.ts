@@ -19,14 +19,16 @@ export async function performEngineRestart({ targetQueue, isRestarted, isV8Isola
     const isolateMaxTime = isolate?.maxTimeSec ?? Infinity;
     const shouldRecycleIsolate = isV8Isolate && isolateUptimeSec >= isolateMaxTime;
 
-    console?.info(
-        [
-          '[V8_ISOLATE_STATS]',
-          `  isolateUptimeSec: ${isolateUptimeSec}`,
-          `  isolateMaxTime: ${isolateMaxTime}`,
-          `  isolateRemainingTimeSec: ${(isolate?.remainingTime ?? 0) / 1000}`,
-        ].join('\n')
-    )
+    if (isV8Isolate && isolate) {
+        console?.info(
+            [
+              '[V8_ISOLATE_STATS]',
+              `  isolateUptimeSec: ${isolateUptimeSec}`,
+              `  isolateMaxTime: ${isolateMaxTime}`,
+              `  isolateRemainingTimeSec: ${(isolate?.remainingTime ?? 0) / 1000}`,
+            ].join('\n')
+        )
+    }
 
     if (isRestarted && isV8Isolate && isolate) {
         console.log(`[Pulsar] : Engine Restarted By (${executionOwner === "watchdog" ? "watchdog" : "self"})`);

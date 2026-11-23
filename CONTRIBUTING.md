@@ -34,4 +34,5 @@ We encourage you to write code yourself. If you use AI that is fine as long as y
 
 We do not want vibe coded or agentic code throughout this repository. Pulsar was built with real mental effort, and we want it to be shaped by innovators and not by sloppy AI generated code.
 
+By contributing you agree that your contributions will be licensed under the project's Apache License 2.0.
 Thank you for helping build Pulsar.

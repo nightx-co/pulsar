@@ -29,7 +29,7 @@ Pulsar has not undergone enough stress testing, failure simulation, or long-runn
 
 Treat reliability as unproven until we publish reproducible stress-test results and collect more production feedback.
 
-**Configuration**
+## Configuration
 
 Configuration is a mission critical part of running Pulsar. If it is not set up correctly the engine will not work. This covers three areas:
 
@@ -47,7 +47,7 @@ We have put a lot of effort into designing the engine's interfaces to minimize t
 Pass those drivers in.
 - Also define the network interface inside the engine configuration.
 
-The network interface now ships with its own drivers so most of that setup is gone. We have condensed the engine configuration as far as we reasonably can and what remains are the outbound configuration options you still need to manage today.
+The network interface now constructs its built-in HTTP/WebSocket drivers, but persistent runtimes still require the `networkInterface` configuration; only manual driver setup is gone.
 
 ## Recommended use
 

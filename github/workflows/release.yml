@@ -1,49 +1,119 @@
 name: Automated Release
 
-enabled : false
-
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
-  release:
-    if: false
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      client: ${{ steps.filter.outputs.client }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect Package Changes
+        uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            core:
+              - 'packages/core/**'
+              - '!packages/core/package.json'
+            client:
+              - 'packages/client/**'
+              - '!packages/client/package.json'
+
+  release-core:
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Setup Node.js (for npm authentication)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install Dependencies
-        run: bun install
-
-      - name: Run Build
-        run: bun run build
-
-      # Optional: Configure Git credentials if your release script pushes version commits back to main
       - name: Configure Git User
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Publish Core Package
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Core
+        run: bun run build:core
+
+      - name: Bump Core Patch Version
+        run: bun run patch:core
+
+      - name: Publish Core to npm
         run: bun run release:core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish Consumer Package
-        run: bun run release:consumer
+      - name: Push Version Commit and Tag
+        run: git push --follow-tags
+
+  release-client:
+    needs: changes
+    if: needs.changes.outputs.client == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure Git User
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Client
+        run: bun run build:client
+
+      - name: Bump Client Patch Version
+        run: bun run patch:client
+
+      - name: Publish Client to npm
+        run: bun run release:client
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Push Version Commit and Tag
+        run: git push --follow-tags

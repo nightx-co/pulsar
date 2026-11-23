@@ -9,7 +9,6 @@ import { PulsarRuntime } from "../../types/runtime.types";
 import type { PulsarUnifiedStorage } from "../../storage/PulsarStorage";
 import type { NetworkConfig } from "../interfaces/network.types";
 import type { NetworkInterface } from "../NetworkInterface";
-import type { QueueService } from "../../modules/Queue.module";
 import type { EngineConsumerConfig } from "../../types/consumer.types";
 import type { RuntimeCacheStorage } from "../../subsys/RuntimeCacheStorage";
 
@@ -27,7 +26,6 @@ export class HttpNetworkDriver extends BaseNetworkDriver {
         readonly networkConfig : NetworkConfig,
         private readonly networkInterface : NetworkInterface,
         private storage : PulsarUnifiedStorage,
-        private queueService : QueueService
     ) {
         super(networkConfig);
         this.store = createRuntimeCacheStorage();
@@ -39,7 +37,6 @@ export class HttpNetworkDriver extends BaseNetworkDriver {
             this.runtimeEventBridge,
             this.store,
             this.logger,
-            this.queueService,
             this.storage
         );
 
