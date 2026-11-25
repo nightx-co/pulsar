@@ -1,44 +1,49 @@
 export class IsolateInstance {
-    constructor(private MAX_ISOLATE_LIFESPAN_SEC : number) {
-        this.set("isolate_id", crypto.randomUUID());
-        this.set("isolate_start_time", Date.now());
-        this.set("isolate_max_life_span_sec", this.MAX_ISOLATE_LIFESPAN_SEC * 1000);
-    }
-
-    public isSameIsolate(id : string) : boolean {
-        return id === this.get<string>("isolate_id");
-    }
-
-    get id () : string {
-        return this.get<string>("isolate_id") ?? crypto.randomUUID();
-    }
-
-    get remainingTime() : number {
-        const startTime = this.get<number>("isolate_start_time");
-        const maxSpan = this.get<number>("isolate_max_life_span_sec") ?? this.MAX_ISOLATE_LIFESPAN_SEC * 1000;
-
-        if (typeof startTime !== "number") {
-            return maxSpan;
+    
+    constructor(private readonly maxLifespanSec : number) {
+        if (this.get<number>("isolate_start_time_ms") === undefined) {
+            this.set("isolate_id", crypto.randomUUID());
+            this.set("isolate_start_time_ms", Date.now());
         }
 
-        const elapsed = Date.now() - startTime;
-        return Math.max(0, maxSpan - elapsed);
+      this.set("isolate_max_lifespan_sec", maxLifespanSec);
     }
-
-    get uptime() : number {
-        const startTime = this.get<number>("isolate_start_time");
-        return typeof startTime === "number" ? Date.now() - startTime : 0;
+  
+    public isSameIsolate(id : string) : boolean {
+        return id === this.id;
     }
-
-    get maxTimeSec() : number {
-        return (this.get<number>("isolate_max_life_span_sec") ?? this.MAX_ISOLATE_LIFESPAN_SEC * 1000) / 1000;
+  
+    get id() {
+        let id = this.get<string>("isolate_id");
+        if (!id) {
+            id = crypto.randomUUID();
+            this.set("isolate_id", id);
+        }
+        return id;
     }
-
-    set<T = unknown>(key: string, value: T) : void {
+  
+    get maxTimeSec() {
+        return this.get<number>("isolate_max_lifespan_sec") ?? this.maxLifespanSec;
+    }
+  
+    get uptimeSec() {
+        const startMs = this.get<number>("isolate_start_time_ms");
+        return typeof startMs === "number" ? (Date.now() - startMs) / 1000 : 0;
+    }
+  
+    get remainingTimeSec() {
+        return Math.max(0, this.maxTimeSec - this.uptimeSec);
+    }
+  
+    get isExpired() : boolean {
+        return this.uptimeSec >= this.maxTimeSec;
+    }
+  
+    set<T = unknown>(key : string, value : T) {
         (globalThis as Record<string, unknown>)[key] = value;
     }
-
-    get<T = unknown>(key: string) : T | undefined {
-        return (globalThis as Record<string, unknown>)[key] as T;
+  
+    get<T = unknown>(key : string) : T | undefined {
+        return (globalThis as Record<string, unknown>)[key] as T | undefined;
     }
 }

@@ -28,7 +28,7 @@ export class DeferredTickEvaluator {
         if(config.get('runtime') === PulsarRuntime.V8_ISOLATE) {
             const isolate = config.raw.isolate;
             if (!isolate) throw new Error("Isolate is not configured for V8_Isolate_Runtime!");
-            deltaRemainingTimeMs = isolate.remainingTime - upcomingTimeMs;
+            deltaRemainingTimeMs = isolate.remainingTimeSec - (upcomingTimeMs / 1000);
         }
         else {
             deltaRemainingTimeMs = this.clock.getTimeRemaining() - upcomingTimeMs;
@@ -60,11 +60,11 @@ export class DeferredTickEvaluator {
             if(config.get('runtime') === PulsarRuntime.V8_ISOLATE) {
                 const isolate = config.raw.isolate;
                 if (!isolate) throw new Error("Isolate is not configured for V8_Isolate_Runtime!");
-                remainingTime = isolate.remainingTime;
+                remainingTime = isolate.remainingTimeSec;
             }
             else {
                 remainingTime = this.clock.getTimeRemaining();
-                console.log(`remainingTime : ${(remainingTime / 1000).toFixed(2)}`)
+                console.log(`remainingTime : ${(remainingTime).toFixed(2)}`)
             }
 
             if (remainingTime <= requiredBudgetMs) {

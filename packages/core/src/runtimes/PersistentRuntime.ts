@@ -169,6 +169,8 @@ export class PersistentRuntime extends PulsarRuntimeCore {
         return false;
     }
 
+    override async onTimeExceed(ctx: IRuntimeExecutionContext) {}
+
     override async handleRestart() {
         this.logger.log("[Persistent Runtime] : Restart triggered. Handled by process manager (PM2/systemd).");
     }

@@ -81,18 +81,18 @@ export abstract class PulsarCore {
 
         this.events = new PulsarEventBus();
 
-        let maxExecutionBudgetMs = Infinity;
+        let maxExecutionBudgetSec = Infinity;
 
         const isV8Isolate = config.raw.runtime === PulsarRuntime.V8_ISOLATE;
 
         const isolate = config.get('isolate')!;
 
         if(isV8Isolate) {
-            maxExecutionBudgetMs = Math.max(0, isolate.remainingTime - 5000);
+            maxExecutionBudgetSec = Math.max(0, isolate.remainingTimeSec - 5);
         }
         else if(config.raw.runtime === PulsarRuntime.SERVERLESS_VM) {
-            maxExecutionBudgetMs = config.raw.timeoutSec * 1000;
-            this.logger.log(`[Clock] : SERVERLESS runtime started with ${maxExecutionBudgetMs / 1000} second timeout.`);
+            maxExecutionBudgetSec = config.raw.timeoutSec * 1000;
+            this.logger.log(`[Clock] : SERVERLESS runtime started with ${maxExecutionBudgetSec} second timeout.`);
         }
 
         this.storage = config.raw.storage;
@@ -100,9 +100,9 @@ export abstract class PulsarCore {
         this.storage.bindInstanceId(instanceId);
         
         this.clock = new PulsarClock({
-            maxExecutionBudgetMs,
+            maxExecutionBudgetSec,
             safetyBufferMs: 0,
-            maxTrackHistory : 50,
+            maxTrackHistory : 500,
             enabled : true
         })
         
@@ -180,14 +180,14 @@ export abstract class PulsarCore {
             runtimeStrategy : this.runtimeStrategy
         })
 
-        if(Number.isFinite(maxExecutionBudgetMs) && isV8Isolate) {
+        if(Number.isFinite(maxExecutionBudgetSec) && isV8Isolate) {
             this.logger.log(`[EngineRuntime] : isolate registred with id : [${isolate.id}]`);
-            this.logger.log(`[Clock] : Synced execution timeout (${maxExecutionBudgetMs / 1000}s) with isolate [${isolate.id}]`);
+            this.logger.log(`[Clock] : Synced execution timeout (${maxExecutionBudgetSec.toFixed(2)}s) with isolate [${isolate.id}]`);
         }
         else {
             this.logger.log(`[EngineRuntime] : Engine Started With No V8 Isolate (${new Date().toISOString()})`);
-            if(Number.isFinite(maxExecutionBudgetMs)) {
-                this.logger.log(`[Clock] : Synced execution timeout (${maxExecutionBudgetMs / 1000}s)`);
+            if(Number.isFinite(maxExecutionBudgetSec)) {
+                this.logger.log(`[Clock] : Synced execution timeout (${maxExecutionBudgetSec.toFixed(2)}s)`);
             }
         }
     }

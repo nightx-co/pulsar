@@ -1,11 +1,11 @@
 import { PulsarRuntimeCore, type RuntimeDependencies } from "../shared/PulsarRuntimeCore.ts";
+import { config } from "../service/ConfigurationStore.ts";
+import { DeferredTickEvaluator } from "../subsys/DeferredTickEvaluator.ts";
+import { PulsarEventBus } from "../service/PulsarEventBus.ts";
 import { PulsarRuntime } from "../types/runtime.types.ts";
 
 import type { EngineQueuesConfig } from "../types/queue.types.ts";
 import type { IRuntimeExecutionContext } from "./runtimeTypes.ts";
-import { config } from "../service/ConfigurationStore.ts";
-import { DeferredTickEvaluator } from "../subsys/DeferredTickEvaluator.ts";
-import { PulsarEventBus } from "../service/PulsarEventBus.ts";
 
 export class IsolateRuntime extends PulsarRuntimeCore {
     public readonly type = "V8_ISOLATE";
@@ -13,6 +13,8 @@ export class IsolateRuntime extends PulsarRuntimeCore {
     public override minBootRequirementSec = 5;
 
     private deferredTickEvaluator : DeferredTickEvaluator;
+
+    private letRuntimeTimeExcdeedInvoked = false;
 
     constructor(private deps : RuntimeDependencies) {
         super(deps);
@@ -42,14 +44,10 @@ export class IsolateRuntime extends PulsarRuntimeCore {
         const isSafeToContinue = this.deps.clock.isSafeToContinue();
 
         if (!isSafeToContinue) {
-            this.logger.log(`[EngineRuntime] : Ending All Ticks due to time limit.`);
-            
             PulsarEventBus.emit("tick:time-exceeded", {
                 queue,
                 elapsedMs : this.deps.clock.getElapsedTotalTime()
-            });
-
-            PulsarEventBus.emit("tick:cycle-completed", { queue, cycles : 1 });
+            })
             
             return;
         }
@@ -181,7 +179,7 @@ export class IsolateRuntime extends PulsarRuntimeCore {
 
                 if(isV8Isolate && config.raw.isolate) {
                     const isolate = config.raw.isolate;
-                    const remainingTimeSec = (isolate.remainingTime / 1000);
+                    const remainingTimeSec = isolate.remainingTimeSec;
 
                     const MIN_EXECUTION_TIME_SEC = this.minBootRequirementSec;
 
@@ -261,6 +259,14 @@ export class IsolateRuntime extends PulsarRuntimeCore {
             });
 
             await this.storage.ops.updateRestartOwnership(queue, 'handled_by_engine');
+        }
+    }
+
+    public override async onTimeExceed(ctx : IRuntimeExecutionContext) {
+        this.logger.log(`[IsolateRuntime] : Runtime Level Time Exceeded. Ending All Active Ticks.`);
+
+        for(const { queue } of ctx.getActiveQueues()) {
+            PulsarEventBus.emit("tick:time-exceeded", { queue, elapsedMs : this.deps.clock.getElapsedTotalTime()});
         }
     }
 

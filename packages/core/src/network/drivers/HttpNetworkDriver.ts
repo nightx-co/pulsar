@@ -6,6 +6,7 @@ import { createRuntimeCacheStorage } from "../../subsys/RuntimeCacheStorage";
 import { config } from "../../service/ConfigurationStore";
 
 import { PulsarRuntime } from "../../types/runtime.types";
+import { CircuitBreakerFSM } from '@package/src/fsm/domain/CircuitBreaker';
 import type { PulsarUnifiedStorage } from "../../storage/PulsarStorage";
 import type { NetworkConfig } from "../interfaces/network.types";
 import type { NetworkInterface } from "../NetworkInterface";
@@ -87,6 +88,14 @@ export class HttpNetworkDriver extends BaseNetworkDriver {
         }
         catch (error) {
             this.logger.error('Error dispatching jobs to http consumer,', error);
+
+            // VIEW THE CircuitBreaker.ts FOR MORE REFERENCES.
+            CircuitBreakerFSM.handleFailedDispatch(queue);
+        }
+        finally {
+            /*
+                DEREGISTER THE WORKER SLOT HERE, SO THE NEXT DISPATCH WONT GET STALE DUE TO SLOT EXHUSTION.
+            */
         }
     }
 

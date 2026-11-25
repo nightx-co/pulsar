@@ -5,11 +5,11 @@ export const Queue1 = createQueue({
     queue: "q_5",
     type : "STANDER",
     concurrency: 1,
-    cycleTickLimit : 15,
+    cycleTickLimit : 5,
     maxJobsPerTick : 100_000,
     n: 10,
     sleep: 10,
-    profile: "BALANCED",
+    profile: "STANDARD",
     pooler : "interval-driven-pooler",
     stateTransitionPolicy : {
         enabled : false,
@@ -27,7 +27,7 @@ export const Queue2 = createQueue({
     queue: "q_6",
     type : "STANDER",
     concurrency: 1,
-    cycleTickLimit : 5,
+    cycleTickLimit : 20,
     maxJobsPerTick : 1000,
     n: 10,
     sleep: 10,
@@ -42,7 +42,7 @@ export const Queue2 = createQueue({
 
 
 export const Queue3 = createQueue({
-    queue: "q_3",
+    queue: "order_processing_queue",
     type : "STANDER",
     concurrency: 1,
     cycleTickLimit : 10,
@@ -50,7 +50,7 @@ export const Queue3 = createQueue({
     n: 10,
     sleep: 10,
     profile: "STANDARD",  // REALTIME | STANDARD | RELAXED | ULTRA_EFFICIENT | BALANCED |  CUSTOM
-    pooler : "interval-driven-pooler", // interval-driven-pooler(IDP) | event-driven-pooler(EDP)
+    pooler : "event-driven-pooler", // interval-driven-pooler(IDP) | event-driven-pooler(EDP)
     stateTransitionPolicy : {
         enabled : false,
     },

@@ -62,10 +62,9 @@ export class TickEventRepository {
         this.ctx.tickController.endTick(queue);
     }
 
-    public async onTimeExceeded() {
-        if (this.ctx.runtimeStrategy.shouldShutdownOnCycleComplete) {
-            await this.ctx.shutdown();
-        }
+    public async onTimeExceeded({ queue } : PulsarEventMap["tick:time-exceeded"]) {
+        this.logger.log(`[Tick] : Ending [${queue}] All Ticks due to time limit.`);
+        this.ctx.tickController.endTick(queue);
     }
 
     public async onHealthCheckRequested() {

@@ -28,6 +28,7 @@ export class Pulsar<R extends PulsarRuntimeType = PulsarRuntimeType> extends Pul
     // so the HTTP handler can await it before the response returns.
     private shutdownPromise : Promise<void> | null = null;
 
+    private runtimeTimeExceededInvoked : boolean = false;
     private activeQueues = new Set<EngineQueuesConfig>();
 
     constructor (private baseConfig : ConfigForRuntime<R> & { runtime : R }) {
@@ -58,6 +59,22 @@ export class Pulsar<R extends PulsarRuntimeType = PulsarRuntimeType> extends Pul
         })
 
         this.eventSubscriptionModule.start();
+
+        /*
+            ALTHOUGH TICK LEVEL TIME CHECKS RUN TO DETERMINE WHETHER TO CONTINUE EXECUTING THE NEXT TICK OR STOP THE TICK PROCESS,
+            NORMAL TICK EXECUTION BECOMES SLOWER WHEN THE QUEUE PROFILE IS SET TO ULTRA_EFFICIENT OR RELAXED.
+            AS THE INTERVAL BETWEEN TICKS INCREASES, THE RISK OF RUNNING OUT OF TIME RISES AND MID-EXECUTION TERMINATION CAN OCCUR.
+            PLACING THIS COUNTDOWN WATCHDOG IN THE CLOCK MODULE ALLOWS IT TO INVOKE THE CALLBACK UPON EXPIRATION, NOTIFYING THE
+            RUNTIME METHOD SO THE RUNTIME CAN TAKE ACTION, SUCH AS ENDING THE TICK PROCESS, WITH GREATER ACCURACY.
+        */
+        void this.clock.registerRemainingTimeWatchdog(() => {
+            if(this.runtimeTimeExceededInvoked) return;
+            this.runtimeTimeExceededInvoked = true;
+
+            return this.runtimeStrategy.onTimeExceed(this.executionContext).catch((err) => {
+                this.logger.error(`[Engine] : encountered error during invoking this.runtimeStrategy.onTimeExceed(args)`, err);
+            })
+        })
     }
 
     public async start() {
@@ -150,7 +167,7 @@ export class Pulsar<R extends PulsarRuntimeType = PulsarRuntimeType> extends Pul
         
         if(this.isV8Isolate) {
             const isolate = this.V8Isolate;
-            const timeRemaining = isolate.remainingTime;
+            const timeRemaining = isolate.remainingTimeSec;
             delaySeconds = timeRemaining + 5;
         }
 

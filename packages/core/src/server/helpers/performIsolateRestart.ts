@@ -15,17 +15,17 @@ interface IEnginePerformRestart {
 }
 
 export async function performEngineRestart({ targetQueue, isRestarted, isV8Isolate, isolate, executionOwner, lastExecutionId, lastIsolateId, poolerMode, engine } : IEnginePerformRestart) {
-    const isolateUptimeSec = (isolate?.uptime ?? 0) / 1000;
+    const isolateUptimeSec = isolate?.uptimeSec ?? 0;
     const isolateMaxTime = isolate?.maxTimeSec ?? Infinity;
-    const shouldRecycleIsolate = isV8Isolate && isolateUptimeSec >= isolateMaxTime;
+    const shouldRecycleIsolate = isV8Isolate && (isolate?.isExpired ?? false);
 
     if (isV8Isolate && isolate) {
         console?.info(
             [
               '[V8_ISOLATE_STATS]',
-              `  isolateUptimeSec: ${isolateUptimeSec}`,
+              `  isolateUptimeSec: ${isolateUptimeSec.toFixed(2)}`,
               `  isolateMaxTime: ${isolateMaxTime}`,
-              `  isolateRemainingTimeSec: ${(isolate?.remainingTime ?? 0) / 1000}`,
+              `  isolateRemainingTimeSec: ${isolate.remainingTimeSec.toFixed(2)}`,
             ].join('\n')
         )
     }

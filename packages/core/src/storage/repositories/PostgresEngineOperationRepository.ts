@@ -104,7 +104,11 @@ export class PostgresEngineOperationRepository implements IPulsarPostgresEngineO
     }
 
     async checkFencingTokenValidity(queue : string, token : string | number) {
-        const numericToken = typeof token === 'string' && /^\d+$/.test(token) ? Number(token) : NaN;
+        const numericToken = typeof token === 'number' ? token : typeof token === 'string' && /^\d+$/.test(token.trim()) ? Number(token.trim()) : NaN;
+
+        if (!Number.isInteger(numericToken) || numericToken < 0) {
+            return false;
+        }
 
         if (isNaN(numericToken)) return false;
 

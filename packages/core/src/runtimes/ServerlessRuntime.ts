@@ -207,5 +207,13 @@ export class ServerlessRuntime extends PulsarRuntimeCore {
         return { isEdpLock, isIdpLock, targetEdpQueue };
     }
 
+    public override async onTimeExceed(ctx : IRuntimeExecutionContext) {
+        this.logger.log(`[ServerlessRuntime] : Runtime Level Time Exceeded. Ending All Active Ticks.`);
+
+        for(const { queue } of ctx.getActiveQueues()) {
+            PulsarEventBus.emit("tick:time-exceeded", { queue, elapsedMs : this.deps.clock.getElapsedTotalTime()});
+        }
+    }
+
     public override async handleRestart(_ctx: IRuntimeExecutionContext) {};
 }

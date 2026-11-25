@@ -10,20 +10,20 @@ import { PulsarLoggerIntegrations, PulsarEventsIntegrations } from "../integrati
 
 import { Queue1, Queue2, Queue3 } from "./Queues";
 import { Nebula } from "../cluster/Nebula";
-import { createPulsarRequestHandler  } from "../server";
+import { createPulsarRequestHandler  } from "../server/index";
 import { EventTriggerStrategy } from "../types/eventTriggerStrategry.types";
 
 const cacheStorage = new RedisDriver({
     protocol : "tcp",
     connectionString : "127.0.0.1:6379",
-    //connectionString: "redis://localhost:32774",
+    //connectionString: "redis://localhost:32769",
     //token : 'example_token',
     //url : 'http://127.0.0.1:8079'
 })
 
 const postgresDriver = new PostgresDriver({
     connectionString: "postgresql://postgres:password@localhost:5432/postgres",
-    //connectionString: "postgres://supabase_admin:app_password@localhost:32775/order_processing_demo_database",
+    //connectionString: "postgres://supabase_admin:app_password@localhost:32770/order_processing_demo_database",
     connectionProtocol : 'tcp'
 })
 
@@ -36,23 +36,21 @@ const unifiedStorage = new PulsarUnifiedStorage({
 const INSTANCE_ID = 'eu-central-1';
 const apiKey = 'MMvGnFbCs7gpFaO31SOmvz4b82jEp1SVfoKLUAIIivqGXPoVDDeycjDfdwAOIkwx';
 
-const isolate = new IsolateInstance(10);
+const isolate = new IsolateInstance(20);
 
 const getEngine = (instanceId : string) : Pulsar => {
-    console.log(`calling enigne`)
     return new Pulsar({
-        runtime : PulsarRuntime.SERVERLESS_VM,
+        runtime : PulsarRuntime.V8_ISOLATE,
         instanceId : instanceId,
         apiKey : apiKey,
         storage : unifiedStorage,
-        //isolate,
-        timeoutSec : 150,
+        isolate,
+        //timeoutSec : 150,
         queues : [
-            Queue3,
-            //Queue2,
+            //Queue1,
+            Queue2,
             //Queue3
         ],
-        //isolate,
         swarmConfig : {
             maxGlobalConcurrency : 1000,
             globalMaxJobsPerTick : 100_000,
@@ -65,8 +63,8 @@ const getEngine = (instanceId : string) : Pulsar => {
             // handler(selfUrl) {
             //     console.log(`[Pulsar] Process : SELF INVOKE FUNCTION EXECUTED.`)
             // },
-            selfRestartIntervalSec : 10,
-            selfInvocationIntervalSec : 5,
+            // selfRestartIntervalSec : 10,
+            // selfInvocationIntervalSec : 5,
             
             //poolingIntervalMS : 500,
             
@@ -74,14 +72,14 @@ const getEngine = (instanceId : string) : Pulsar => {
             cycleTickLimit : 1000,
             tickConcurrency : "sequential",
             
-            interventionPolicy : "cycle"
+            interventionPolicy : "disabled"
         },
 
         //eventTriggerStrategy : EventTriggerStrategy['POSTGRES_NOTIFY'],
 
         // networkInterface : {
         //     mode : "hybrid",
-        //     port : 9500,
+        //     port : 4500,
         // },
 
         integrations : [
@@ -124,7 +122,8 @@ const requestHandler = createPulsarRequestHandler({
     getEngine,
     unifiedStorage,
     instanceId : INSTANCE_ID,
-    isolate
+    isolate,
+    apiKey
 })
 
 const server = Bun.serve({

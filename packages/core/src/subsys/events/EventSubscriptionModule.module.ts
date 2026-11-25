@@ -23,7 +23,7 @@ export class EventSubscriptionModule {
         this.subscribe("tick:cycle-completed", (payload) => this.tickEventRepo.onCycleCompleted(payload));
         this.subscribe("tick:force-run", (payload) => this.tickEventRepo.onForceRun(payload));
         this.subscribe("tick:end", (payload) => this.tickEventRepo.onTickEnd(payload));
-        this.subscribe("tick:time-exceeded", () => this.tickEventRepo.onTimeExceeded());
+        this.subscribe("tick:time-exceeded", (payload) => this.tickEventRepo.onTimeExceeded(payload));
 
         // queue
         this.subscribe("queue:transition-profile-to-active", (payload) => this.queueEventRepo.handleTransitionToActiveProfile(payload));

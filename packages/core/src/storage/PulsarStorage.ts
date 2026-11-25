@@ -105,11 +105,11 @@ export class PulsarUnifiedStorage {
     public async disconnect() {
         this.isConnected = false;
 
-        const tasks : Promise<void>[] = [];
-        if (this.cache) tasks.push(this.cache.disconnect());
-        if (this.db) tasks.push(this.db.disconnect());
+        // const tasks : Promise<void>[] = [];
+        // if (this.cache) tasks.push(this.cache.disconnect());
+        // if (this.db) tasks.push(this.db.disconnect());
 
-        await Promise.all(tasks);
+        // await Promise.all(tasks);
     }
 
     public async healthCheck() {

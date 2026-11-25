@@ -70,6 +70,15 @@ export abstract class PulsarRuntimeCore implements IPulsarRuntime {
     abstract handleCycleCompletion(ctx : IRuntimeExecutionContext) : Promise<boolean>;
     abstract handleRestart(ctx : IRuntimeExecutionContext) : Promise<void>;
 
+    /*
+        ALTHOUGH TICK LEVEL TIME CHECKS RUN TO DETERMINE WHETHER TO CONTINUE EXECUTING THE NEXT TICK OR STOP THE TICK PROCESS,
+        NORMAL TICK EXECUTION BECOMES SLOWER WHEN THE QUEUE PROFILE IS SET TO ULTRA_EFFICIENT OR RELAXED.
+        AS THE INTERVAL BETWEEN TICKS INCREASES, THE RISK OF RUNNING OUT OF TIME RISES AND MID-EXECUTION TERMINATION CAN OCCUR.
+        PLACING THIS COUNTDOWN WATCHDOG IN THE CLOCK MODULE ALLOWS IT TO INVOKE THE CALLBACK UPON EXPIRATION, NOTIFYING THE
+        RUNTIME METHOD SO THE RUNTIME CAN TAKE ACTION, SUCH AS ENDING THE TICK PROCESS, WITH GREATER ACCURACY.
+    */
+    abstract onTimeExceed(ctx : IRuntimeExecutionContext) : Promise<void>;
+
     public abstract executeTick(queueConfig: EngineQueuesConfig, tickRunner: () => Promise<void>) : Promise<void>;
     abstract scheduleTick(queueConfig: EngineQueuesConfig, tickRunner: () => Promise<void>) : Promise<void>;
 
